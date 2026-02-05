@@ -163,10 +163,35 @@ document.querySelectorAll(".tab-btn").forEach(b => {
 
 // Main UI Rendering function
 function render() {
+    // 1. Raw, Production, aur Sales tables ko update karein
     tRaw.querySelector("tbody").innerHTML = user.raw.map(r => `<tr><td>${r.d}</td><td>${r.n}</td><td>${r.q}</td><td>₹${r.c}</td><td><button onclick="del('raw',${r.id})">Del</button></td></tr>`).join('');
     tProd.querySelector("tbody").innerHTML = user.prod.map(p => `<tr><td>${p.d}</td><td>${p.n}</td><td>${p.q}</td><td>${p.rn}</td><td>${p.rq}</td><td><button onclick="del('prod',${p.id})">Del</button></td></tr>`).join('');
     tSale.querySelector("tbody").innerHTML = user.sale.map(s => `<tr><td>${s.d}</td><td>${s.n}</td><td>${s.q}</td><td>₹${s.a}</td><td><button onclick="del('sale',${s.id})">Del</button></td></tr>`).join('');
 
+    // 2. DASHBOARD: ALL ACTIVITY ENTRIES (Combining all arrays)
+    const allActivities = [
+        ...user.raw.map(r => ({ type: 'Raw', d: r.d, n: r.n, q: r.q, det: `Cost: ₹${r.c}` })),
+        ...user.prod.map(p => ({ type: 'Prod', d: p.d, n: p.n, q: p.q, det: `Used: ${p.rn} (${p.rq})` })),
+        ...user.sale.map(s => ({ type: 'Sale', d: s.d, n: s.n, q: s.q, det: `Amt: ₹${s.a}` }))
+    ];
+
+    // Newest entries top par dikhane ke liye sort karein
+    allActivities.sort((a, b) => new Date(b.d) - new Date(a.d));
+
+    const activityTableBody = document.querySelector("#activityTable tbody");
+    if (activityTableBody) {
+        activityTableBody.innerHTML = allActivities.map(a => `
+            <tr>
+                <td><strong>${a.type}</strong></td>
+                <td>${a.d}</td>
+                <td>${a.n}</td>
+                <td>${a.q}</td>
+                <td>${a.det}</td>
+            </tr>
+        `).join('');
+    }
+
+    // 3. INVENTORY LOGIC (Stock Status)
     const inv = {};
     user.raw.forEach(r => { const k = "RAW_"+r.n.toLowerCase(); if(!inv[k]) inv[k]={c:'Raw', n:r.n, in:0, out:0}; inv[k].in += r.q; });
     user.prod.forEach(p => {
@@ -177,8 +202,11 @@ function render() {
 
     stockTable.querySelector("tbody").innerHTML = Object.values(inv).map(i => `<tr><td>${i.c}</td><td>${i.n}</td><td>${i.in}</td><td>${i.out}</td><td style="font-weight:bold; color:${(i.in-i.out)<0?'red':'green'}">${(i.in-i.out).toFixed(2)}</td></tr>`).join('');
 
+    // 4. TOP CARDS (Profit, Sales, Cost)
     const cost = user.raw.reduce((a,b)=>a+b.c,0);
     const sale = user.sale.reduce((a,b)=>a+b.a,0);
-    dCost.textContent = "₹"+cost; dSales.textContent = "₹"+sale; dProfit.textContent = "₹"+(sale-cost);
+    dCost.textContent = "₹"+cost; 
+    dSales.textContent = "₹"+sale; 
+    dProfit.textContent = "₹"+(sale-cost);
     dProfit.className = 'card-value ' + (sale-cost >= 0 ? 'profit' : 'loss');
 }
