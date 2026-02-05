@@ -6,7 +6,21 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 let tokenClient;
 let accessToken = null;
 let fileId = null;
-let user = { raw: [], prod: [], sale: [], company: "Business Tracker" };
+const fRaw = document.getElementById('fRaw');
+const fProd = document.getElementById('fProd');
+const fSale = document.getElementById('fSale');
+const tRaw = document.getElementById('tRaw');
+const tProd = document.getElementById('tProd');
+const tSale = document.getElementById('tSale');
+// 1. Top par user object badlein
+let user = { 
+    raw: [], 
+    prod: [], 
+    sale: [], 
+    company: "", 
+    owner: "", 
+    isSetupDone: false 
+};
 
 // --- 1. INITIALIZATION & LOGIN ---
 
@@ -108,12 +122,7 @@ async function sync() {
 
 // --- 3. UI & FORM LOGIC ---
 
-function startApp() {
-    document.getElementById('authSection').style.display='none';
-    document.getElementById('mainHeader').style.display='block';
-    document.getElementById('mainApp').style.display='block';
-    render();
-}
+
 
 function logout() {
     localStorage.removeItem('bt_cloud_token');
@@ -162,6 +171,11 @@ document.querySelectorAll(".tab-btn").forEach(b => {
 });
 
 // Main UI Rendering function
+// Inhe render() function ke bahar, uske theek upar likhein
+const dCost = document.getElementById('dCost');
+const dSales = document.getElementById('dSales');
+const dProfit = document.getElementById('dProfit');
+const stockTable = document.getElementById('stockTable');
 function render() {
     // 1. Raw, Production, aur Sales tables ko update karein
     tRaw.querySelector("tbody").innerHTML = user.raw.map(r => `<tr><td>${r.d}</td><td>${r.n}</td><td>${r.q}</td><td>₹${r.c}</td><td><button onclick="del('raw',${r.id})">Del</button></td></tr>`).join('');
@@ -209,4 +223,57 @@ function render() {
     dSales.textContent = "₹"+sale; 
     dProfit.textContent = "₹"+(sale-cost);
     dProfit.className = 'card-value ' + (sale-cost >= 0 ? 'profit' : 'loss');
+}
+
+
+// Live Clock ko update karne ka function
+function updateClock() {
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+    const timeStr = now.toLocaleDateString('en-IN', options);
+    const timeEl = document.getElementById('liveTime');
+    if(timeEl) timeEl.textContent = "🕒 " + timeStr;
+}
+setInterval(updateClock, 1000); // Har 1 second mein chalega
+
+// Final Start App Logic (Ise purane startApp se replace karein)
+function startApp() {
+    if (!user.isSetupDone) {
+        // Agar pehli baar hai, toh setup dikhayein
+        document.getElementById('setupSection').style.display = 'block';
+        // Login button hide kar dein kyunki login ho chuka hai
+        document.querySelector('button[onclick="initiateLogin()"]').style.display = 'none';
+    } else {
+        // Agar setup ho chuka hai, toh dashboard dikhayein
+        document.getElementById('authSection').style.display = 'none';
+        document.getElementById('mainHeader').style.display = 'block';
+        document.getElementById('mainApp').style.display = 'block';
+        
+        // Header mein Company aur Owner ka naam set karein
+        document.getElementById('headerTitle').innerHTML = `
+            ${user.company} <span class="owner-name">| Owner: ${user.owner}</span>
+        `;
+        updateClock();
+        render();
+    }
+}
+
+// Setup data ko cloud par save karne ke liye
+async function saveSetup() {
+    const comp = document.getElementById('setupCompany').value;
+    const own = document.getElementById('setupOwner').value;
+
+    if (!comp || !own) {
+        alert("Please enter both Company and Owner names.");
+        return;
+    }
+
+    user.company = comp;
+    user.owner = own;
+    user.isSetupDone = true;
+
+    showLoading(true);
+    await sync(); // Ye aapke cloud sync function ko call karega
+    showLoading(false);
+    startApp(); // Setup ke baad app start karein
 }
