@@ -25,18 +25,47 @@
     .auth-container { max-width: 400px; margin: 60px auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
     .error-msg { color: #dc2626; font-size: 13px; margin-top: 10px; display: none; text-align: center; }
     .highlight-box { background: #fef3c7; padding: 8px; border-radius: 4px; border: 1px solid #fde68a; }
-#footer{
-    margin-bottom: 0px;
+    .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; color: white; }
+.raw { background: #f59e0b; }
+.prod { background: #10b981; }
+.sale { background: #3b82f6; }
+/* Body ko flex container banayein taaki footer niche push ho sake */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f5f7fb;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    height:20px;
+    flex-direction: column;
+    min-height: 100vh; /* Poori screen ki height cover karega */
+}
 
+/* Container ko expand karein taaki wo bachi hui jagah le le */
+.container {
+    max-width: 1100px;
+    margin: 20px auto;
+    padding: 0 15px;
+    flex: 1; /* Ye main content ko expand karega aur footer ko niche dhakelega */
 }
-a{
+
+/* Footer styling */
+#footer {
+    background: #222426; /* Header jaisa dark color */
+    color: #ffffff;
+    padding: 15px 0;
+    text-align: center;
+    font-size: 14px;
+    margin-top: 30px;
+    width: 100%;
+}
+
+#footer a {
+    color: #60a5fa; /* Light blue link */
+    font-weight: bold;
     text-decoration: none;
+    margin-left: 5px;
 }
-a:hover{
+
+#footer a:hover {
     text-decoration: underline;
-    color: blue;
 }
