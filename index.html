@@ -17,13 +17,26 @@
   <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="initiateLogin()">
     Login with Google
   </button>
+  <div id="setupSection" style="display:none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; text-align: left;">
+    <h3 style="margin-bottom:10px; font-size: 16px;">🏢 First-Time Setup</h3>
+    <label>Company Name</label>
+    <input type="text" id="setupCompany" placeholder="e.g. Vishal Traders" style="margin-bottom: 10px;">
+    <label>Owner Name</label>
+    <input type="text" id="setupOwner" placeholder="Your Name" style="margin-bottom: 15px;">
+    <button class="btn btn-primary" onclick="saveSetup()" style="width:100%;">Create Account</button>
+</div>
   <div id="authError" class="error-msg"></div>
 </div>
 
-  <header id="mainHeader" style="display:none;">
-    <h1 id="headerTitle">Company</h1>
-    <button class="btn btn-danger" style="position:absolute; right:20px; top:20px;" onclick="location.reload()">Logout</button>
-  </header>
+<header id="mainHeader" style="display:none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: auto;">
+        <div>
+            <h1 id="headerTitle">Company</h1>
+            <div id="liveTime" style="font-size: 14px; margin-top: 5px; color: #9ca3af;"></div>
+        </div>
+        <button class="btn btn-danger" onclick="location.reload()">Logout</button>
+    </div>
+</header>
 
   <div class="container" id="mainApp" style="display:none;">
     <div class="tabs">
