@@ -69,3 +69,28 @@ body {
 #footer a:hover {
     text-decoration: underline;
 }
+
+/* Header ko align karne ke liye */
+header {
+    text-align: left; /* Center se hata kar left kar dein */
+    padding: 20px 30px;
+}
+
+#headerTitle {
+    font-size: 24px;
+}
+
+#headerTitle span.owner-name {
+    font-size: 14px;
+    font-weight: normal;
+    color: #60a5fa;
+    margin-left: 10px;
+}
+
+/* Setup form ke labels ki styling */
+#setupSection label {
+    display: block;
+    margin-top: 10px;
+    color: #4b5563;
+    font-size: 12px;
+}
