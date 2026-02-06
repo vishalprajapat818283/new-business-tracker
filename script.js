@@ -6,7 +6,12 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 let tokenClient;
 let accessToken = null;
 let fileId = null;
-
+const fRaw = document.getElementById('fRaw');
+const fProd = document.getElementById('fProd');
+const fSale = document.getElementById('fSale');
+const tRaw = document.getElementById('tRaw');
+const tProd = document.getElementById('tProd');
+const tSale = document.getElementById('tSale');
 // 1. Top par user object badlein
 let user = { 
     raw: [], 
@@ -21,16 +26,10 @@ let user = {
 
 // This runs as soon as the page loads
 window.onload = () => {
-    // UI initially hide rakhein
-    document.getElementById('mainHeader').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'none';
-    
     const savedToken = localStorage.getItem('bt_cloud_token');
     if (savedToken) {
         accessToken = savedToken;
-        loadFromCloud(); 
-    } else {
-        document.getElementById('authSection').style.display = 'block';
+        loadFromCloud(); // Try to auto-login
     }
 };
 
@@ -56,6 +55,7 @@ function initiateLogin() {
 async function loadFromCloud() {
     showLoading(true);
     try {
+        // Search for the data file in the hidden 'appDataFolder'
         const res = await fetch('https://www.googleapis.com/drive/v3/files?q=name="tracker_data.json"&spaces=appDataFolder', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
@@ -63,32 +63,23 @@ async function loadFromCloud() {
         
         if (list.files && list.files.length > 0) {
             fileId = list.files[0].id;
+            // Download file content
             const content = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
-            
-            const cloudData = await content.json();
-            
-            // SECURITY CHECK: Sirf tabhi load karein agar cloud data valid ho
-            if (cloudData && cloudData.isSetupDone) {
-                user = cloudData;
-                console.log("Success: Data loaded from Cloud.");
-            } else {
-                console.log("File exists but setup not finished.");
-            }
+            user = await content.json();
+            console.log("Data loaded from Cloud.");
         } else {
-            // Nayi file sirf tab banayein jab Drive par kuch na mile
-            console.log("New user detected.");
+            // First time user: Create the file in the cloud
+            console.log("No file found. Creating new cloud database...");
             await createCloudFile();
         }
-        
-        startApp(); // Ye hamesha end mein chalna chahiye
-        
+        startApp();
     } catch (e) {
         console.error("Cloud Error:", e);
-        // Agar token purana hai toh logout karke fresh login karwayein
+        // If token expired, clear it and show login
         localStorage.removeItem('bt_cloud_token');
-        location.reload(); 
+        document.getElementById('authSection').style.display = 'block';
     } finally {
         showLoading(false);
     }
@@ -114,17 +105,8 @@ async function createCloudFile() {
 
 // Global Sync function - pushes current 'user' object to Drive
 async function sync() {
-    // Agar setup nahi hua, ya data galti se khali hai, toh sync STOP karein
-    if (!user.isSetupDone || !accessToken || !fileId) return;
-
-    // Safety: Agar cloud data load nahi hua aur humne sync daba diya, toh wo purana data uda dega.
-    // Isliye ye check zaroori hai:
-    if (user.company === "" && user.raw.length === 0) {
-        console.warn("Safety trigger: Blocking sync of empty data.");
-        return;
-    }
-
-    render(); 
+    render(); // Update visual UI immediately
+    if (!accessToken || !fileId) return;
 
     try {
         await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
@@ -132,9 +114,9 @@ async function sync() {
             headers: { Authorization: `Bearer ${accessToken}` },
             body: new Blob([JSON.stringify(user)], { type: 'application/json' })
         });
-        console.log("Cloud Updated.");
+        console.log("Cloud Synced Successfully.");
     } catch (e) {
-        console.error("Sync Error:", e);
+        console.warn("Sync failed. Will retry on next entry.");
     }
 }
 
@@ -155,79 +137,21 @@ function showLoading(show) {
 // Form Submission Handlers
 fRaw.onsubmit = (e) => { 
     e.preventDefault(); 
-    
-    const dateVal = document.getElementById('riDate').value;
-    const nameVal = document.getElementById('riName').value;
-    const qtyVal = +document.getElementById('riQty').value;
-    const costVal = +document.getElementById('riCost').value;
-
-    if(!nameVal || !qtyVal) {
-        alert("Please fill Raw Material name and quantity.");
-        return;
-    }
-
-    user.raw.push({
-        id: Date.now(), 
-        d: dateVal, 
-        n: nameVal, 
-        q: qtyVal, 
-        c: costVal
-    }); 
-
+    user.raw.push({id:Date.now(), d:riDate.value, n:riName.value, q:+riQty.value, c:+riCost.value}); 
     e.target.reset(); 
     sync(); 
 };
 
 fProd.onsubmit = (e) => { 
     e.preventDefault(); 
-
-    // Get input values directly from the form elements
-    const pDateVal = document.getElementById('pDate').value;
-    const pNameVal = document.getElementById('pName').value;
-    const pQtyVal = +document.getElementById('pQty').value;
-    const pRawNameVal = document.getElementById('pRawName').value;
-    const pRawQtyVal = +document.getElementById('pRawQty').value;
-
-    // Validation: Don't add if fields are empty
-    if(!pNameVal || !pQtyVal) {
-        alert("Please fill in the product name and quantity.");
-        return;
-    }
-
-    user.prod.push({
-        id: Date.now(), 
-        d: pDateVal, 
-        n: pNameVal, 
-        q: pQtyVal, 
-        rn: pRawNameVal, 
-        rq: pRawQtyVal
-    }); 
-
+    user.prod.push({id:Date.now(), d:pDate.value, n:pName.value, q:+pQty.value, rn:pRawName.value, rq:+pRawQty.value}); 
     e.target.reset(); 
     sync(); 
 };
 
 fSale.onsubmit = (e) => { 
     e.preventDefault(); 
-    
-    const dateVal = document.getElementById('sDate').value;
-    const nameVal = document.getElementById('sName').value;
-    const qtyVal = +document.getElementById('sQty').value;
-    const amtVal = +document.getElementById('sAmt').value;
-
-    if(!nameVal || !qtyVal) {
-        alert("Please fill Item name and quantity sold.");
-        return;
-    }
-
-    user.sale.push({
-        id: Date.now(), 
-        d: dateVal, 
-        n: nameVal, 
-        q: qtyVal, 
-        a: amtVal
-    }); 
-
+    user.sale.push({id:Date.now(), d:sDate.value, n:sName.value, q:+sQty.value, a:+sAmt.value}); 
     e.target.reset(); 
     sync(); 
 };
@@ -246,17 +170,12 @@ document.querySelectorAll(".tab-btn").forEach(b => {
     }
 });
 
-
+// Main UI Rendering function
+// Inhe render() function ke bahar, uske theek upar likhein
 const dCost = document.getElementById('dCost');
 const dSales = document.getElementById('dSales');
 const dProfit = document.getElementById('dProfit');
 const stockTable = document.getElementById('stockTable');
-const fRaw = document.getElementById('fRaw');
-const fProd = document.getElementById('fProd');
-const fSale = document.getElementById('fSale');
-const tRaw = document.getElementById('tRaw');
-const tProd = document.getElementById('tProd');
-const tSale = document.getElementById('tSale');
 function render() {
     // 1. Raw, Production, aur Sales tables ko update karein
     tRaw.querySelector("tbody").innerHTML = user.raw.map(r => `<tr><td>${r.d}</td><td>${r.n}</td><td>${r.q}</td><td>₹${r.c}</td><td><button onclick="del('raw',${r.id})">Del</button></td></tr>`).join('');
