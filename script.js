@@ -55,7 +55,7 @@ function initiateLogin() {
 async function loadFromCloud() {
     showLoading(true);
     try {
-        // Search for the data file in the hidden 'appDataFolder'
+        // Step 1: Google Drive mein file search karein
         const res = await fetch('https://www.googleapis.com/drive/v3/files?q=name="tracker_data.json"&spaces=appDataFolder', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
@@ -63,21 +63,30 @@ async function loadFromCloud() {
         
         if (list.files && list.files.length > 0) {
             fileId = list.files[0].id;
-            // Download file content
+            
+            // Step 2: File milne par uska content download karein
             const content = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
-            user = await content.json();
-            console.log("Data loaded from Cloud.");
+            
+            const cloudData = await content.json();
+            
+            // Step 3: Check karein ki cloud data khali to nahi hai
+            if (cloudData && (cloudData.isSetupDone === true || cloudData.raw)) {
+                user = cloudData; // Purana data variable mein load karein
+                console.log("Purana data mil gaya aur load ho gaya.");
+            }
         } else {
-            // First time user: Create the file in the cloud
-            console.log("No file found. Creating new cloud database...");
+            // Agar file pehli baar bhi nahi mili, tabhi naya file banayein
+            console.log("Pehli baar use kar rahe hain. Nayi file ban rahi hai...");
             await createCloudFile();
         }
-        startApp();
+        
+        // Sab load hone ke baad hi app start karein
+        startApp(); 
+        
     } catch (e) {
-        console.error("Cloud Error:", e);
-        // If token expired, clear it and show login
+        console.error("Cloud Se data load karne mein error:", e);
         localStorage.removeItem('bt_cloud_token');
         document.getElementById('authSection').style.display = 'block';
     } finally {
@@ -105,7 +114,20 @@ async function createCloudFile() {
 
 // Global Sync function - pushes current 'user' object to Drive
 async function sync() {
-    render(); // Update visual UI immediately
+    // 1. Pehla Check: Agar setup nahi hua hai, toh sync na karein
+    if (!user.isSetupDone) return; 
+
+    // 2. Dusra Check: Agar data khali hai (Arrays length 0), toh sync na karein
+    // Ye line aapka purana data delete hone se bachayegi
+    if (user.raw.length === 0 && user.prod.length === 0 && user.sale.length === 0) {
+        console.warn("Sync skipped: No data to save yet.");
+        render(); // UI phir bhi update karein
+        return;
+    }
+
+    render(); // UI update karein
+    
+    // 3. Teesra Check: Agar login/file connection nahi hai
     if (!accessToken || !fileId) return;
 
     try {
@@ -116,7 +138,7 @@ async function sync() {
         });
         console.log("Cloud Synced Successfully.");
     } catch (e) {
-        console.warn("Sync failed. Will retry on next entry.");
+        console.warn("Sync failed. Check connection or token.");
     }
 }
 
