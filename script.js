@@ -155,21 +155,79 @@ function showLoading(show) {
 // Form Submission Handlers
 fRaw.onsubmit = (e) => { 
     e.preventDefault(); 
-    user.raw.push({id:Date.now(), d:riDate.value, n:riName.value, q:+riQty.value, c:+riCost.value}); 
+    
+    const dateVal = document.getElementById('riDate').value;
+    const nameVal = document.getElementById('riName').value;
+    const qtyVal = +document.getElementById('riQty').value;
+    const costVal = +document.getElementById('riCost').value;
+
+    if(!nameVal || !qtyVal) {
+        alert("Please fill Raw Material name and quantity.");
+        return;
+    }
+
+    user.raw.push({
+        id: Date.now(), 
+        d: dateVal, 
+        n: nameVal, 
+        q: qtyVal, 
+        c: costVal
+    }); 
+
     e.target.reset(); 
     sync(); 
 };
 
 fProd.onsubmit = (e) => { 
     e.preventDefault(); 
-    user.prod.push({id:Date.now(), d:pDate.value, n:pName.value, q:+pQty.value, rn:pRawName.value, rq:+pRawQty.value}); 
+
+    // Get input values directly from the form elements
+    const pDateVal = document.getElementById('pDate').value;
+    const pNameVal = document.getElementById('pName').value;
+    const pQtyVal = +document.getElementById('pQty').value;
+    const pRawNameVal = document.getElementById('pRawName').value;
+    const pRawQtyVal = +document.getElementById('pRawQty').value;
+
+    // Validation: Don't add if fields are empty
+    if(!pNameVal || !pQtyVal) {
+        alert("Please fill in the product name and quantity.");
+        return;
+    }
+
+    user.prod.push({
+        id: Date.now(), 
+        d: pDateVal, 
+        n: pNameVal, 
+        q: pQtyVal, 
+        rn: pRawNameVal, 
+        rq: pRawQtyVal
+    }); 
+
     e.target.reset(); 
     sync(); 
 };
 
 fSale.onsubmit = (e) => { 
     e.preventDefault(); 
-    user.sale.push({id:Date.now(), d:sDate.value, n:sName.value, q:+sQty.value, a:+sAmt.value}); 
+    
+    const dateVal = document.getElementById('sDate').value;
+    const nameVal = document.getElementById('sName').value;
+    const qtyVal = +document.getElementById('sQty').value;
+    const amtVal = +document.getElementById('sAmt').value;
+
+    if(!nameVal || !qtyVal) {
+        alert("Please fill Item name and quantity sold.");
+        return;
+    }
+
+    user.sale.push({
+        id: Date.now(), 
+        d: dateVal, 
+        n: nameVal, 
+        q: qtyVal, 
+        a: amtVal
+    }); 
+
     e.target.reset(); 
     sync(); 
 };
