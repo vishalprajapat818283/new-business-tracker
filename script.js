@@ -189,17 +189,17 @@ document.querySelectorAll(".tab-btn").forEach(b => {
 });
 
 
-function render() {
-    const dCost = document.getElementById('dCost');
+const dCost = document.getElementById('dCost');
 const dSales = document.getElementById('dSales');
 const dProfit = document.getElementById('dProfit');
 const stockTable = document.getElementById('stockTable');
- const fRaw = document.getElementById('fRaw');
+const fRaw = document.getElementById('fRaw');
 const fProd = document.getElementById('fProd');
 const fSale = document.getElementById('fSale');
 const tRaw = document.getElementById('tRaw');
 const tProd = document.getElementById('tProd');
 const tSale = document.getElementById('tSale');
+function render() {
     // 1. Raw, Production, aur Sales tables ko update karein
     tRaw.querySelector("tbody").innerHTML = user.raw.map(r => `<tr><td>${r.d}</td><td>${r.n}</td><td>${r.q}</td><td>₹${r.c}</td><td><button onclick="del('raw',${r.id})">Del</button></td></tr>`).join('');
     tProd.querySelector("tbody").innerHTML = user.prod.map(p => `<tr><td>${p.d}</td><td>${p.n}</td><td>${p.q}</td><td>${p.rn}</td><td>${p.rq}</td><td><button onclick="del('prod',${p.id})">Del</button></td></tr>`).join('');
