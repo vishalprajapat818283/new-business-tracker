@@ -6,12 +6,7 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 let tokenClient;
 let accessToken = null;
 let fileId = null;
-const fRaw = document.getElementById('fRaw');
-const fProd = document.getElementById('fProd');
-const fSale = document.getElementById('fSale');
-const tRaw = document.getElementById('tRaw');
-const tProd = document.getElementById('tProd');
-const tSale = document.getElementById('tSale');
+
 // 1. Top par user object badlein
 let user = { 
     raw: [], 
@@ -26,10 +21,16 @@ let user = {
 
 // This runs as soon as the page loads
 window.onload = () => {
+    // UI initially hide rakhein
+    document.getElementById('mainHeader').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'none';
+    
     const savedToken = localStorage.getItem('bt_cloud_token');
     if (savedToken) {
         accessToken = savedToken;
-        loadFromCloud(); // Try to auto-login
+        loadFromCloud(); 
+    } else {
+        document.getElementById('authSection').style.display = 'block';
     }
 };
 
@@ -55,7 +56,6 @@ function initiateLogin() {
 async function loadFromCloud() {
     showLoading(true);
     try {
-        // Step 1: Google Drive mein file search karein
         const res = await fetch('https://www.googleapis.com/drive/v3/files?q=name="tracker_data.json"&spaces=appDataFolder', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
@@ -63,32 +63,32 @@ async function loadFromCloud() {
         
         if (list.files && list.files.length > 0) {
             fileId = list.files[0].id;
-            
-            // Step 2: File milne par uska content download karein
             const content = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
             
             const cloudData = await content.json();
             
-            // Step 3: Check karein ki cloud data khali to nahi hai
-            if (cloudData && (cloudData.isSetupDone === true || cloudData.raw)) {
-                user = cloudData; // Purana data variable mein load karein
-                console.log("Purana data mil gaya aur load ho gaya.");
+            // SECURITY CHECK: Sirf tabhi load karein agar cloud data valid ho
+            if (cloudData && cloudData.isSetupDone) {
+                user = cloudData;
+                console.log("Success: Data loaded from Cloud.");
+            } else {
+                console.log("File exists but setup not finished.");
             }
         } else {
-            // Agar file pehli baar bhi nahi mili, tabhi naya file banayein
-            console.log("Pehli baar use kar rahe hain. Nayi file ban rahi hai...");
+            // Nayi file sirf tab banayein jab Drive par kuch na mile
+            console.log("New user detected.");
             await createCloudFile();
         }
         
-        // Sab load hone ke baad hi app start karein
-        startApp(); 
+        startApp(); // Ye hamesha end mein chalna chahiye
         
     } catch (e) {
-        console.error("Cloud Se data load karne mein error:", e);
+        console.error("Cloud Error:", e);
+        // Agar token purana hai toh logout karke fresh login karwayein
         localStorage.removeItem('bt_cloud_token');
-        document.getElementById('authSection').style.display = 'block';
+        location.reload(); 
     } finally {
         showLoading(false);
     }
@@ -114,21 +114,17 @@ async function createCloudFile() {
 
 // Global Sync function - pushes current 'user' object to Drive
 async function sync() {
-    // 1. Pehla Check: Agar setup nahi hua hai, toh sync na karein
-    if (!user.isSetupDone) return; 
+    // Agar setup nahi hua, ya data galti se khali hai, toh sync STOP karein
+    if (!user.isSetupDone || !accessToken || !fileId) return;
 
-    // 2. Dusra Check: Agar data khali hai (Arrays length 0), toh sync na karein
-    // Ye line aapka purana data delete hone se bachayegi
-    if (user.raw.length === 0 && user.prod.length === 0 && user.sale.length === 0) {
-        console.warn("Sync skipped: No data to save yet.");
-        render(); // UI phir bhi update karein
+    // Safety: Agar cloud data load nahi hua aur humne sync daba diya, toh wo purana data uda dega.
+    // Isliye ye check zaroori hai:
+    if (user.company === "" && user.raw.length === 0) {
+        console.warn("Safety trigger: Blocking sync of empty data.");
         return;
     }
 
-    render(); // UI update karein
-    
-    // 3. Teesra Check: Agar login/file connection nahi hai
-    if (!accessToken || !fileId) return;
+    render(); 
 
     try {
         await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
@@ -136,9 +132,9 @@ async function sync() {
             headers: { Authorization: `Bearer ${accessToken}` },
             body: new Blob([JSON.stringify(user)], { type: 'application/json' })
         });
-        console.log("Cloud Synced Successfully.");
+        console.log("Cloud Updated.");
     } catch (e) {
-        console.warn("Sync failed. Check connection or token.");
+        console.error("Sync Error:", e);
     }
 }
 
@@ -192,13 +188,18 @@ document.querySelectorAll(".tab-btn").forEach(b => {
     }
 });
 
-// Main UI Rendering function
-// Inhe render() function ke bahar, uske theek upar likhein
-const dCost = document.getElementById('dCost');
+
+function render() {
+    const dCost = document.getElementById('dCost');
 const dSales = document.getElementById('dSales');
 const dProfit = document.getElementById('dProfit');
 const stockTable = document.getElementById('stockTable');
-function render() {
+ const fRaw = document.getElementById('fRaw');
+const fProd = document.getElementById('fProd');
+const fSale = document.getElementById('fSale');
+const tRaw = document.getElementById('tRaw');
+const tProd = document.getElementById('tProd');
+const tSale = document.getElementById('tSale');
     // 1. Raw, Production, aur Sales tables ko update karein
     tRaw.querySelector("tbody").innerHTML = user.raw.map(r => `<tr><td>${r.d}</td><td>${r.n}</td><td>${r.q}</td><td>₹${r.c}</td><td><button onclick="del('raw',${r.id})">Del</button></td></tr>`).join('');
     tProd.querySelector("tbody").innerHTML = user.prod.map(p => `<tr><td>${p.d}</td><td>${p.n}</td><td>${p.q}</td><td>${p.rn}</td><td>${p.rq}</td><td><button onclick="del('prod',${p.id})">Del</button></td></tr>`).join('');
