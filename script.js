@@ -2,6 +2,15 @@
 // 1. Paste your Client ID from Google Cloud Console here
 const CLIENT_ID = '330273087572-bb5h0ob2ahu56h93sac7hvf07je6uha7.apps.googleusercontent.com'; 
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+window.onload = () => {
+    const savedToken = localStorage.getItem('bt_cloud_token');
+    if (savedToken) {
+        accessToken = savedToken;
+        // Hide the login screen immediately so user doesn't try to log in again
+        document.getElementById('authSection').style.display = 'none'; 
+        loadFromCloud();
+    }
+};
 
 let tokenClient;
 let accessToken = null;
@@ -25,13 +34,6 @@ let user = {
 // --- 1. INITIALIZATION & LOGIN ---
 
 // This runs as soon as the page loads
-window.onload = () => {
-    const savedToken = localStorage.getItem('bt_cloud_token');
-    if (savedToken) {
-        accessToken = savedToken;
-        loadFromCloud(); // Try to auto-login
-    }
-};
 
 function initiateLogin() {
     tokenClient = google.accounts.oauth2.initTokenClient({
@@ -65,24 +67,29 @@ async function loadFromCloud() {
             const content = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
+            
             const cloudData = await content.json();
             
-            // Critical: Only overwrite local 'user' if cloud data is valid
-            if (cloudData && cloudData.isSetupDone) {
+            // Check if cloud data is valid before applying it
+            if (cloudData && (cloudData.isSetupDone || cloudData.raw)) {
                 user = cloudData;
-                console.log("Data loaded from Cloud.");
+                console.log("Data recovered from Cloud.");
             }
         } else {
-            console.log("No cloud file found. User needs to complete setup.");
-            // Do NOT call createCloudFile here. 
-            // Let the startApp() handle showing the setup screen.
+            console.log("New user: No existing file found.");
+            fileId = null; // Ensure fileId is null so saveSetup knows to create a new one
         }
+        
+        // Only start the app AFTER we are sure about the cloud data
         startApp();
+        
     } catch (e) {
         console.error("Cloud Error:", e);
-        // If it's a 401 (Unauthorized), the token expired
-        localStorage.removeItem('bt_cloud_token');
-        document.getElementById('authSection').style.display = 'block';
+        // If 401 (expired session), clear and login again
+        if(e.status === 401) {
+            localStorage.removeItem('bt_cloud_token');
+            location.reload();
+        }
     } finally {
         showLoading(false);
     }
@@ -108,8 +115,14 @@ async function createCloudFile() {
 
 // Global Sync function - pushes current 'user' object to Drive
 async function sync() {
-    render(); // Update visual UI immediately
-    if (!accessToken || !fileId) return;
+    render(); 
+    // SAFETY LOCK: 
+    // 1. Must have a token and fileId
+    // 2. Must NOT sync if isSetupDone is still false (meaning data hasn't loaded yet)
+    if (!accessToken || !fileId || !user.isSetupDone) {
+        console.log("Sync skipped: Data not fully loaded or setup incomplete.");
+        return;
+    }
 
     try {
         await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
