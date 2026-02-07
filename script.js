@@ -55,29 +55,32 @@ function initiateLogin() {
 async function loadFromCloud() {
     showLoading(true);
     try {
-        // Search for the data file in the hidden 'appDataFolder'
-        const res = await fetch('https://www.googleapis.com/drive/v3/files?q=name="tracker_data.json"&spaces=appDataFolder', {
+        const res = await fetch('https://www.googleapis.com/drive/v3/files?q=name="tracker_data.json"&spaces=appDataFolder&fields=files(id, name)', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         const list = await res.json();
         
         if (list.files && list.files.length > 0) {
             fileId = list.files[0].id;
-            // Download file content
             const content = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
-            user = await content.json();
-            console.log("Data loaded from Cloud.");
+            const cloudData = await content.json();
+            
+            // Critical: Only overwrite local 'user' if cloud data is valid
+            if (cloudData && cloudData.isSetupDone) {
+                user = cloudData;
+                console.log("Data loaded from Cloud.");
+            }
         } else {
-            // First time user: Create the file in the cloud
-            console.log("No file found. Creating new cloud database...");
-            await createCloudFile();
+            console.log("No cloud file found. User needs to complete setup.");
+            // Do NOT call createCloudFile here. 
+            // Let the startApp() handle showing the setup screen.
         }
         startApp();
     } catch (e) {
         console.error("Cloud Error:", e);
-        // If token expired, clear it and show login
+        // If it's a 401 (Unauthorized), the token expired
         localStorage.removeItem('bt_cloud_token');
         document.getElementById('authSection').style.display = 'block';
     } finally {
@@ -273,7 +276,14 @@ async function saveSetup() {
     user.isSetupDone = true;
 
     showLoading(true);
-    await sync(); // Ye aapke cloud sync function ko call karega
+    
+    // If fileId exists, we update (PATCH), if not, we create (POST)
+    if (!fileId) {
+        await createCloudFile(); 
+    } else {
+        await sync();
+    }
+    
     showLoading(false);
-    startApp(); // Setup ke baad app start karein
+    startApp();
 }
