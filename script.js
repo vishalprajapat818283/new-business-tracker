@@ -3,14 +3,22 @@
 const CLIENT_ID = '330273087572-bb5h0ob2ahu56h93sac7hvf07je6uha7.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 window.onload = () => {
-    const savedToken = localStorage.getItem('bt_cloud_token');
-    if (savedToken) {
-        accessToken = savedToken;
-        // Hide the login screen immediately so user doesn't try to log in again
-        document.getElementById('authSection').style.display = 'none';
-        loadFromCloud();
-    }
+  const savedToken = localStorage.getItem("btcloud_token");
+
+  // By default, show login
+  const auth = document.getElementById("authSection");
+  if (auth) auth.style.display = "block";
+
+  if (savedToken) {
+    accessToken = savedToken;
+    loadFromCloud().catch(() => {
+      // If cloud load fails, keep login visible instead of blank screen
+      localStorage.removeItem("btcloud_token");
+      if (auth) auth.style.display = "block";
+    });
+  }
 };
+
 
 let tokenClient;
 let accessToken = null;
