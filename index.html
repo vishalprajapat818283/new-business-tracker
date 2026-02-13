@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,36 +8,39 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
-<body>
-<div id="loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:100; justify-content:center; align-items:center; font-weight:bold;">
-  🔄 Syncing with Google Drive...
-</div>
- <div id="authSection" class="auth-container">
-  <h1 style="text-align:center;">💼 Tracker Pro</h1>
-  <p style="text-align:center; color:#6b7280;">Cloud Sync Enabled</p>
-  <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="initiateLogin()">
-    Login with Google
-  </button>
-  <div id="setupSection" style="display:none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; text-align: left;">
-    <h3 style="margin-bottom:10px; font-size: 16px;">🏢 First-Time Setup</h3>
-    <label>Company Name</label>
-    <input type="text" id="setupCompany" placeholder="e.g. Vishal Traders" style="margin-bottom: 10px;">
-    <label>Owner Name</label>
-    <input type="text" id="setupOwner" placeholder="Your Name" style="margin-bottom: 15px;">
-    <button class="btn btn-primary" onclick="saveSetup()" style="width:100%;">Create Account</button>
-</div>
-  <div id="authError" class="error-msg"></div>
-</div>
 
-<header id="mainHeader" style="display:none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: auto;">
-        <div>
-            <h1 id="headerTitle">Company</h1>
-            <div id="liveTime" style="font-size: 14px; margin-top: 5px; color: #9ca3af;"></div>
-        </div>
-        <button class="btn btn-danger" onclick="location.reload()">Logout</button>
+<body>
+  <div id="loading"
+    style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:100; justify-content:center; align-items:center; font-weight:bold;">
+    🔄 Syncing with Google Drive...
+  </div>
+  <div id="authSection" class="auth-container">
+    <h1 style="text-align:center;">💼 Tracker Pro</h1>
+    <p style="text-align:center; color:#6b7280;">Cloud Sync Enabled</p>
+    <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="initiateLogin()">
+      Login with Google
+    </button>
+    <div id="setupSection"
+      style="display:none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; text-align: left;">
+      <h3 style="margin-bottom:10px; font-size: 16px;">🏢 First-Time Setup</h3>
+      <label>Company Name</label>
+      <input type="text" id="setupCompany" placeholder="e.g. Vishal Traders" style="margin-bottom: 10px;">
+      <label>Owner Name</label>
+      <input type="text" id="setupOwner" placeholder="Your Name" style="margin-bottom: 15px;">
+      <button class="btn btn-primary" onclick="saveSetup()" style="width:100%;">Create Account</button>
     </div>
-</header>
+    <div id="authError" class="error-msg"></div>
+  </div>
+
+  <header id="mainHeader" style="display:none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: auto;">
+      <div>
+        <h1 id="headerTitle">Company</h1>
+        <div id="liveTime" style="font-size: 14px; margin-top: 5px; color: #9ca3af;"></div>
+      </div>
+      <button class="btn btn-danger" onclick="location.reload()">Logout</button>
+    </div>
+  </header>
 
   <div class="container" id="mainApp" style="display:none;">
     <div class="tabs">
@@ -48,15 +52,30 @@
 
     <section id="dashboard" class="active">
       <div class="cards">
-        <div class="card"><div class="card-title">Net Profit</div><div class="card-value" id="dProfit">₹0</div></div>
-        <div class="card"><div class="card-title">Total Sales</div><div class="card-value" id="dSales">₹0</div></div>
-        <div class="card"><div class="card-title">Total Raw Cost</div><div class="card-value" id="dCost">₹0</div></div>
+        <div class="card">
+          <div class="card-title">Net Profit</div>
+          <div class="card-value" id="dProfit">₹0</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Total Sales</div>
+          <div class="card-value" id="dSales">₹0</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Total Raw Cost</div>
+          <div class="card-value" id="dCost">₹0</div>
+        </div>
       </div>
-      
+
       <h3>📦 Real-Time Stock Status</h3>
       <table id="stockTable">
         <thead>
-          <tr><th>Category</th><th>Item Name</th><th>Total In</th><th>Total Out</th><th>Remains</th></tr>
+          <tr>
+            <th>Category</th>
+            <th>Item Name</th>
+            <th>Total In</th>
+            <th>Total Out</th>
+            <th>Remains</th>
+          </tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -64,7 +83,13 @@
       <h3 style="margin-top:20px;">📜 All Activity Entries</h3>
       <table id="activityTable">
         <thead>
-          <tr><th>Type</th><th>Date</th><th>Item</th><th>Qty</th><th>Details</th></tr>
+          <tr>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Details</th>
+          </tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -80,7 +105,15 @@
         <button type="submit" class="btn btn-primary">Save</button>
       </form>
       <table id="tRaw">
-        <thead><tr><th>Date</th><th>Material</th><th>Qty</th><th>Cost</th><th>Action</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Material</th>
+            <th>Qty</th>
+            <th>Cost</th>
+            <th>Action</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </section>
@@ -91,12 +124,27 @@
         <div><label>Date</label><input type="date" id="pDate" required></div>
         <div><label>Product Name</label><input type="text" id="pName" required></div>
         <div><label>Qty Produced</label><input type="number" id="pQty" step="0.01" required></div>
-        <div class="highlight-box"><label>Raw Used (Name)</label><input type="text" id="pRawName" required></div>
-        <div class="highlight-box"><label>Raw Used (Qty)</label><input type="number" id="pRawQty" step="0.01" required></div>
+        <div class="highlight-box">
+          <label>Raw Used (Select from Stock)</label>
+          <select id="pRawName" required>
+            <option value="">-- Select Raw Material --</option>
+          </select>
+        </div>
+        <div class="highlight-box"><label>Raw Used (Qty)</label><input type="number" id="pRawQty" step="0.01" required>
+        </div>
         <button type="submit" class="btn btn-primary">Save Production</button>
       </form>
       <table id="tProd">
-        <thead><tr><th>Date</th><th>Product</th><th>Qty</th><th>Raw Used</th><th>Usage Qty</th><th>Action</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Raw Used</th>
+            <th>Usage Qty</th>
+            <th>Action</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </section>
@@ -105,13 +153,26 @@
       <h2>Sales Record</h2>
       <form id="fSale">
         <div><label>Date</label><input type="date" id="sDate" required></div>
-        <div><label>Product Name</label><input type="text" id="sName" required></div>
+        <div>
+          <label>Product Name (Select from Stock)</label>
+          <select id="sName" required>
+            <option value="">-- Select Finished Product --</option>
+          </select>
+        </div>
         <div><label>Qty Sold</label><input type="number" id="sQty" step="0.01" required></div>
         <div><label>Sale Amount</label><input type="number" id="sAmt" step="0.01" required></div>
         <button type="submit" class="btn btn-primary">Save Sale</button>
       </form>
       <table id="tSale">
-        <thead><tr><th>Date</th><th>Product</th><th>Qty</th><th>Amount</th><th>Action</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Amount</th>
+            <th>Action</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </section>
@@ -123,4 +184,5 @@
   </div>
   <script src="script.js"></script>
 </body>
+
 </html>
