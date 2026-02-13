@@ -163,15 +163,44 @@ fRaw.onsubmit = (e) => {
 
 fProd.onsubmit = (e) => {
     e.preventDefault();
-    user.prod.push({ id: Date.now(), d: pDate.value, n: pName.value, q: +pQty.value, rn: pRawName.value, rq: +pRawQty.value });
-    e.target.reset();
+    // 1. Add the data to our user object
+    user.prod.push({ 
+        id: Date.now(), 
+        d: pDate.value, 
+        n: pName.value, 
+        q: +pQty.value, 
+        rn: pRawName.value, 
+        rq: +pRawQty.value 
+    });
+    
+    // 2. Clear the text inputs
+    e.target.reset(); 
+    
+    // 3. Reset the dropdown list back to "-- Select Raw Material --"
+    document.getElementById('pRawName').selectedIndex = 0; 
+    
+    // 4. Save to cloud and refresh UI
     sync();
 };
 
 fSale.onsubmit = (e) => {
     e.preventDefault();
-    user.sale.push({ id: Date.now(), d: sDate.value, n: sName.value, q: +sQty.value, a: +sAmt.value });
+    // 1. Add the sale data to our user object
+    user.sale.push({ 
+        id: Date.now(), 
+        d: sDate.value, 
+        n: sName.value, 
+        q: +sQty.value, 
+        a: +sAmt.value 
+    });
+    
+    // 2. Clear the text inputs
     e.target.reset();
+    
+    // 3. Reset the dropdown list back to "-- Select Finished Product --"
+    document.getElementById('sName').selectedIndex = 0;
+    
+    // 4. Save to cloud and refresh UI
     sync();
 };
 
@@ -241,7 +270,8 @@ function render() {
     user.sale.forEach(s => { const fK = "FIN_" + s.n.toLowerCase(); if (!inv[fK]) inv[fK] = { c: 'Finished', n: s.n, in: 0, out: 0 }; inv[fK].out += s.q; });
 
     stockTable.querySelector("tbody").innerHTML = Object.values(inv).map(i => `<tr><td>${i.c}</td><td>${i.n}</td><td>${i.in}</td><td>${i.out}</td><td style="font-weight:bold; color:${(i.in - i.out) < 0 ? 'red' : 'green'}">${(i.in - i.out).toFixed(2)}</td></tr>`).join('');
-
+// Add this inside the render() function near the end
+updateDropdowns(inv);
     // 4. TOP CARDS (Profit, Sales, Cost)
     const cost = user.raw.reduce((a, b) => a + b.c, 0);
     const sale = user.sale.reduce((a, b) => a + b.a, 0);
@@ -309,4 +339,32 @@ async function saveSetup() {
 
     showLoading(false);
     startApp();
+}
+function updateDropdowns(inventory) {
+    const rawSelect = document.getElementById('pRawName');
+    const saleSelect = document.getElementById('sName');
+    
+    // Clear existing options except the first one
+    rawSelect.innerHTML = '<option value="">-- Select Raw Material --</option>';
+    saleSelect.innerHTML = '<option value="">-- Select Finished Product --</option>';
+
+    Object.values(inventory).forEach(item => {
+        const stockLeft = (item.in - item.out).toFixed(2);
+        const option = document.createElement('option');
+        option.value = item.n;
+        option.textContent = `${item.n} (Stock: ${stockLeft})`;
+
+        // If stock is 0 or less, disable it and turn it red
+        if (stockLeft <= 0) {
+            option.disabled = true;
+            option.style.color = "red";
+            option.textContent += " - OUT OF STOCK";
+        }
+
+        if (item.c === 'Raw') {
+            rawSelect.appendChild(option);
+        } else {
+            saleSelect.appendChild(option);
+        }
+    });
 }
