@@ -77,8 +77,10 @@ async function loadFromCloud() {
             location.reload();
         }
     } finally {
-        showLoading(false);
-    }
+    showLoading(false);  // Force hide after 10s max
+    setTimeout(startApp, 10000);  // Emergency dashboard
+}
+
 }
 
 async function createCloudFile() {
@@ -382,19 +384,28 @@ async function saveSetup() {
         alert('Please enter both Company and Owner names.');
         return;
     }
+    
+    // INSTANT LOCAL SETUP (no cloud wait)
     user.company = comp;
     user.owner = own;
     user.isSetupDone = true;
-    showLoading(true);
-    // If fileId exists, we update (PATCH), if not, we create (POST)
-    if (!fileId) {
-        await createCloudFile();
-    } else {
-        await sync();
-    }
-    showLoading(false);
-    startApp();
+    
+    showLoading(false);  // Hide spinner immediately
+    startApp();  // Show dashboard NOW
+    
+    // Background cloud setup (optional)
+    setTimeout(async () => {
+        try {
+            if (!fileId) await createCloudFile();
+            else await sync();
+            console.log('✅ Cloud setup complete');
+        } catch(e) {
+            console.log('Cloud setup failed - using local storage');
+            localStorage.setItem('bt_local', JSON.stringify(user));  // Fallback
+        }
+    }, 500);
 }
+
 
 function updateDropdowns(inventory) {
     const rawSelect = document.getElementById('pRawName');
