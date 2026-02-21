@@ -268,48 +268,58 @@ function calculateInventory() {
 }
 
 function render() {
-    const tRaw = document.getElementById('tRaw');
-    const tProd = document.getElementById('tProd');
-    const tSale = document.getElementById('tSale');
+  const tRaw = document.getElementById('tRaw');
+  const tProd = document.getElementById('tProd');
+  const tSale = document.getElementById('tSale');
+  if (!tRaw || !user) return;
 
-    if (!tRaw || !user) return;
+  // Update Raw table
+  tRaw.querySelector('tbody').innerHTML = user.raw.map(r => 
+    `<tr>
+      <td>${r.d}</td>
+      <td>${r.n}</td>
+      <td>${r.q.toFixed(2)}</td>
+      <td>${r.c.toFixed(2)}</td>
+      <td>${r.ec.toFixed(2)}</td>
+      <td><button onclick="del('raw', ${r.id})" class="btn btn-danger">Del</button></td>
+    </tr>`
+  ).join('');
 
-    // Update Tables
-    tRaw.querySelector('tbody').innerHTML = user.raw.map(r =>
-        `<tr><td>${r.d}</td><td>${r.n}</td><td>${r.q}</td><td>${r.c}</td><td>${r.ec.toFixed(2)}</td><td><button onclick="del('raw',${r.id})">Del</button></td></tr>`
-    ).join('');
+  // Update Production table
+  tProd.querySelector('tbody').innerHTML = user.prod.map(p => 
+    `<tr>
+      <td>${p.d}</td>
+      <td>${p.n}</td>
+      <td>${p.q.toFixed(2)}</td>
+      <td>${p.mainRaw ? `${p.mainRaw.rn} (${p.mainRaw.rq.toFixed(2)})` : '-'}</td>
+      <td>${p.extraRaws ? p.extraRaws.map(er => `${er.rn} (${er.rq.toFixed(2)})`).join(', ') : '-'}</td>
+      <td>${p.ec.toFixed(2)}</td>
+      <td><button onclick="del('prod', ${p.id})" class="btn btn-danger">Del</button></td>
+    </tr>`
+  ).join('');
 
-    tProd.querySelector('tbody').innerHTML = user.prod.map(p =>
-        `<tr><td>${p.d}</td><td>${p.n}</td><td>${p.q}</td><td>${p.mainRaw.rn} (${p.mainRaw.rq})</td><td>${p.extraRaws.map(er => er.rn + ' (' + er.rq + ')').join(', ') || '-'}</td><td>${p.ec.toFixed(2)}</td><td><button onclick="del('prod',${p.id})">Del</button></td></tr>`
-    ).join('');
+  // Update Sales table
+  tSale.querySelector('tbody').innerHTML = user.sale.map(s => 
+    `<tr>
+      <td>${s.d}</td>
+      <td>${s.n}</td>
+      <td>${s.q.toFixed(2)}</td>
+      <td>${s.a.toFixed(2)}</td>
+      <td><button onclick="del('sale', ${s.id})" class="btn btn-danger">Del</button></td>
+    </tr>`
+  ).join('');
 
-    tSale.querySelector('tbody').innerHTML = user.sale.map(s =>
-        `<tr><td>${s.d}</td><td>${s.n}</td><td>${s.q}</td><td>${s.a}</td><td><button onclick="del('sale',${s.id})">Del</button></td></tr>`
-    ).join('');
+  // Rest remains the same: calculate inventory, dashboard, etc.
+  const inv = calculateInventory();
+  // ... (keep your existing stockTable, dashboard, totals code after this)
+}
+function del(type, id) {
+  user[type] = user[type].filter(i => i.id !== id);
+  sync();
+}
 
-    // Calculate Inventory First
-    const inv = calculateInventory(); 
-    
-    // Update Dashboard Activity
-    updateActivityTable();
-
-    // Update Stock Table
-    stockTable.querySelector('tbody').innerHTML = Object.values(inv).map(i =>
-        `<tr><td>${i.c}</td><td>${i.n}</td><td>${i.in.toFixed(2)}</td><td>${i.out.toFixed(2)}</td><td style="font-weight:bold; color:${(i.in - i.out) <= 0 ? 'red' : 'green'}">${(i.in - i.out).toFixed(2)}</td></tr>`
-    ).join('');
-
-    // CRITICAL: Update dropdowns using the calculated inventory
-    updateDropdowns(inv);
-
-    // Update Totals
-    const rawCost = user.raw.reduce((a, b) => a + b.c + b.ec, 0);
-    const prodExtraCost = user.prod.reduce((a, b) => a + b.ec, 0);
-    const totalCost = rawCost + prodExtraCost;
-    const saleTotal = user.sale.reduce((a, b) => a + b.a, 0);
-
-    dCost.textContent = `$${totalCost.toFixed(2)}`;
-    dSales.textContent = `$${saleTotal.toFixed(2)}`;
-    dProfit.textContent = `$${(saleTotal - totalCost).toFixed(2)}`;
+function updateActivityTable() {
+  // Add your activity table logic here if missing, or leave empty
 }
 
 // Live Clock ko update karne ka function
