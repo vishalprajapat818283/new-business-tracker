@@ -102,6 +102,7 @@
         <div><label>Material Name</label><input type="text" id="riName" required></div>
         <div><label>Qty Inward</label><input type="number" id="riQty" step="0.01" required></div>
         <div><label>Total Cost</label><input type="number" id="riCost" step="0.01" required></div>
+        <div><label>Extra Cost</label><input type="number" id="riExtraCost" step="0.01" placeholder="Optional"></div>
         <button type="submit" class="btn btn-primary">Save</button>
       </form>
       <table id="tRaw">
@@ -111,6 +112,8 @@
             <th>Material</th>
             <th>Qty</th>
             <th>Cost</th>
+            <th>Extra Cost</th>
+            <th>Total</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -124,24 +127,26 @@
         <div><label>Date</label><input type="date" id="pDate" required></div>
         <div><label>Product Name</label><input type="text" id="pName" required></div>
         <div><label>Qty Produced</label><input type="number" id="pQty" step="0.01" required></div>
-        <div class="highlight-box">
-          <label>Raw Used (Select from Stock)</label>
-          <select id="pRawName" required>
-            <option value="">-- Select Raw Material --</option>
-          </select>
-        </div>
-        <div class="highlight-box"><label>Raw Used (Qty)</label><input type="number" id="pRawQty" step="0.01" required>
-        </div>
-        <button type="submit" class="btn btn-primary">Save Production</button>
+        <div><label>Extra Cost</label><input type="number" id="pExtraCost" step="0.01" placeholder="Optional"></div>
+        <button type="button" class="btn btn-secondary" onclick="addRawRow()">+ Add Raw Material</button>
       </form>
+
+      <div id="rawMaterialsBlock" class="raw-materials-block">
+        <h3>📋 Raw Materials Used</h3>
+        <div id="rawMaterialsList"></div>
+        <button type="button" class="btn btn-secondary" onclick="addRawRow()" style="margin-top: 10px;">+ Add Another Raw</button>
+      </div>
+
+      <button class="btn btn-primary" onclick="saveProd()" style="width:100%; margin-top:15px;">Save Production</button>
+
       <table id="tProd">
         <thead>
           <tr>
             <th>Date</th>
             <th>Product</th>
             <th>Qty</th>
-            <th>Raw Used</th>
-            <th>Usage Qty</th>
+            <th>Raw Materials Used</th>
+            <th>Extra Cost</th>
             <th>Action</th>
           </tr>
         </thead>
