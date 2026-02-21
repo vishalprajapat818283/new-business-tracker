@@ -182,13 +182,14 @@ document.getElementById('fProd').onsubmit = (e) => {
         extraRaws,  // Array of extra raws
         ec: parseFloat(document.getElementById('pExtraCost').value) || 0  // New extra cost
     });
+  // ... inside fProd.onsubmit ...
     e.target.reset();
-    // Reset dropdowns and extra rows
-    document.getElementById('pRawName').selectedIndex = 0;
-    document.querySelectorAll('.extra-raw-row').forEach((row, i) => {
-        if (i === 0) row.remove();
-    });
-    document.getElementById('pExtraCost').value = '';
+    
+    // Correctly clear all additional rows except the UI template if needed
+    const additionalContainer = document.getElementById('additionalRaws');
+    additionalContainer.innerHTML = '<h4 style="margin: 10px 0; font-size: 14px;">Additional Raw Materials (Optional)</h4>';
+    
+    // Refresh the dropdowns
     sync();
 };
 
@@ -379,13 +380,18 @@ async function saveSetup() {
 function updateDropdowns(inventory) {
     const rawSelect = document.getElementById('pRawName');
     const saleSelect = document.getElementById('sName');
+    const extraSelects = document.querySelectorAll('.extra-raw-select');
     
-    // Save current selections so they don't reset while typing
+    // Save what the user has currently selected so it doesn't disappear
     const currentRaw = rawSelect.value;
     const currentSale = saleSelect.value;
 
+    // CLEAR existing options so we don't get duplicates
     rawSelect.innerHTML = '<option value="">-- Select Raw Material --</option>';
     saleSelect.innerHTML = '<option value="">-- Select Finished Product --</option>';
+    extraSelects.forEach(sel => {
+        sel.innerHTML = '<option value="">-- Select Raw --</option>';
+    });
 
     Object.values(inventory).forEach(item => {
         const stockLeft = (item.in - item.out).toFixed(2);
@@ -393,6 +399,7 @@ function updateDropdowns(inventory) {
         option.value = item.n;
         option.textContent = `${item.n} [Stock: ${stockLeft}]`;
         
+        // Disable if out of stock
         if (parseFloat(stockLeft) <= 0) {
             option.disabled = true;
             option.style.color = 'red';
@@ -400,23 +407,20 @@ function updateDropdowns(inventory) {
         }
 
         if (item.c === 'Raw') {
-            rawSelect.appendChild(option);
-            // Update any existing extra rows
-            document.querySelectorAll('.extra-raw-select').forEach(sel => {
-                const optCopy = option.cloneNode(true);
-                // We only append if not already there, but for simplicity:
-                if(sel.options.length < Object.keys(inventory).length) sel.appendChild(optCopy);
+            rawSelect.appendChild(option.cloneNode(true));
+            // Automatically fill every "Extra Raw" dropdown added by the user
+            extraSelects.forEach(sel => {
+                sel.appendChild(option.cloneNode(true));
             });
         } else {
             saleSelect.appendChild(option);
         }
     });
 
-    // Restore selections
+    // Put the user's selection back
     rawSelect.value = currentRaw;
     saleSelect.value = currentSale;
 }
-
 // New functions for extra raw rows
 let extraRowCounter = 0;
 function addExtraRawRow() {
@@ -434,8 +438,9 @@ function addExtraRawRow() {
     `;
     container.appendChild(row);
     
-    // Refresh the whole app UI to fill the new dropdown
-    render(); 
+    // IMPORTANT: Force the app to fill the new dropdown with materials
+    const inv = calculateInventory();
+    updateDropdowns(inv);
 }
 
 function removeExtraRaw(btn) {
