@@ -5,7 +5,13 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 let tokenClient;
 let accessToken = null;
 let fileId = null;
+let pCategory, pSize;
 
+const sizeMap = {
+    Child: ["4", "5", "6"],
+    Male: ["6", "7", "8", "9", "10"],
+    Female: ["4", "5", "6", "7", "8"]
+};
 let user = {
     raw: [],
     prod: [],
@@ -32,32 +38,43 @@ function initDOMReferences() {
     riQty = document.getElementById('riQty');
     riCost = document.getElementById('riCost');
     riExtraCost = document.getElementById('riExtraCost');
-    
+
     pDate = document.getElementById('pDate');
     pName = document.getElementById('pName');
     pQty = document.getElementById('pQty');
     pExtraCost = document.getElementById('pExtraCost');
-    
+    pCategory = document.getElementById('pCategory');
+    pSize = document.getElementById('pSize');
+
     fSale = document.getElementById('fSale');
     sDate = document.getElementById('sDate');
     sName = document.getElementById('sName');
     sQty = document.getElementById('sQty');
     sAmt = document.getElementById('sAmt');
-    
+
     // Attach event listeners
     if (fRaw) {
-        fRaw.onsubmit = (e) => {
+        fSale.onsubmit = (e) => {
             e.preventDefault();
-            const extraCost = parseFloat(riExtraCost.value) || 0;
-            user.raw.push({ 
-                id: Date.now(), 
-                d: riDate.value, 
-                n: riName.value, 
-                q: parseFloat(riQty.value) || 0, 
-                c: parseFloat(riCost.value) || 0,
-                ec: extraCost
+
+            if (!sName.value) {
+                alert("Select product");
+                return;
+            }
+
+            const selected = JSON.parse(sName.value);
+
+            user.sale.push({
+                id: Date.now(),
+                d: sDate.value,
+                n: selected.name,
+                cat: selected.cat,
+                size: selected.size,
+                q: parseFloat(sQty.value),
+                a: parseFloat(sAmt.value)
             });
-            fRaw.reset();
+
+            fSale.reset();
             sync();
         };
     }
@@ -65,12 +82,12 @@ function initDOMReferences() {
     if (fSale) {
         fSale.onsubmit = (e) => {
             e.preventDefault();
-            user.sale.push({ 
-                id: Date.now(), 
-                d: sDate.value, 
-                n: sName.value, 
-                q: parseFloat(sQty.value) || 0, 
-                a: parseFloat(sAmt.value) || 0 
+            user.sale.push({
+                id: Date.now(),
+                d: sDate.value,
+                n: sName.value,
+                q: parseFloat(sQty.value) || 0,
+                a: parseFloat(sAmt.value) || 0
             });
             fSale.reset();
             if (sName) sName.selectedIndex = 0;
@@ -85,7 +102,7 @@ function initDOMReferences() {
             b.classList.add("active");
             const targetSection = document.getElementById(b.dataset.target);
             if (targetSection) targetSection.classList.add("active");
-            
+
             // Initialize raw materials block when switching to production
             if (b.dataset.target === 'prodSection') {
                 const rawMaterialsList = document.getElementById('rawMaterialsList');
@@ -101,7 +118,7 @@ window.onload = () => {
     initDOMReferences();
     const savedToken = localStorage.getItem("btcloud_token");
     const auth = document.getElementById("authSection");
-    
+
     if (auth) auth.style.display = "block";
 
     if (savedToken) {
@@ -114,6 +131,21 @@ window.onload = () => {
     }
 };
 
+function updateSizeOptions() {
+    if (!pCategory || !pSize) return;
+
+    const category = pCategory.value;
+    pSize.innerHTML = '<option value="">-- Select Size --</option>';
+
+    if (sizeMap[category]) {
+        sizeMap[category].forEach(size => {
+            const option = document.createElement("option");
+            option.value = size;
+            option.textContent = size;
+            pSize.appendChild(option);
+        });
+    }
+}
 // --- GOOGLE DRIVE API OPERATIONS ---
 
 function initiateLogin() {
@@ -145,9 +177,9 @@ async function loadFromCloud() {
         const res = await fetch('https://www.googleapis.com/drive/v3/files?q=name="tracker_data.json"&spaces=appDataFolder&fields=files(id, name)', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
-        
+
         if (!res.ok) throw new Error(`API error: ${res.status}`);
-        
+
         const list = await res.json();
 
         if (list.files && list.files.length > 0) {
@@ -157,7 +189,7 @@ async function loadFromCloud() {
             });
 
             if (!content.ok) throw new Error(`Failed to fetch file: ${content.status}`);
-            
+
             const cloudData = await content.json();
 
             if (cloudData && (cloudData.isSetupDone || cloudData.raw)) {
@@ -199,9 +231,9 @@ async function createCloudFile() {
             headers: { Authorization: `Bearer ${accessToken}` },
             body: form
         });
-        
+
         if (!res.ok) throw new Error(`Failed to create file: ${res.status}`);
-        
+
         const data = await res.json();
         fileId = data.id;
         console.log("Cloud file created successfully.");
@@ -213,7 +245,7 @@ async function createCloudFile() {
 
 async function sync() {
     render();
-    
+
     if (!accessToken || !fileId || !user.isSetupDone) {
         console.log("Sync skipped: Data not fully loaded or setup incomplete.");
         return;
@@ -225,9 +257,9 @@ async function sync() {
             headers: { Authorization: `Bearer ${accessToken}` },
             body: new Blob([JSON.stringify(user)], { type: 'application/json' })
         });
-        
+
         if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
-        
+
         console.log("Cloud Synced Successfully.");
     } catch (e) {
         console.warn("Sync failed:", e);
@@ -249,48 +281,76 @@ function showLoading(show) {
 // Get inventory - helper function with defensive checks
 function getInventory() {
     const inv = {};
-    
+
     try {
-        user.raw.forEach(r => { 
+        user.raw.forEach(r => {
             if (r && r.n) {
-                const k = "RAW_" + r.n.toLowerCase(); 
-                if (!inv[k]) inv[k] = { c: 'Raw', n: r.n, in: 0, out: 0 }; 
-                inv[k].in += parseFloat(r.q) || 0; 
+                const k = "RAW_" + r.n.toLowerCase();
+                if (!inv[k]) inv[k] = { c: 'Raw', n: r.n, in: 0, out: 0 };
+                inv[k].in += parseFloat(r.q) || 0;
             }
         });
-        
+
         user.prod.forEach(p => {
             if (p && p.n) {
                 if (p.rm && Array.isArray(p.rm)) { // New format
                     p.rm.forEach(rawMat => {
                         if (rawMat && rawMat.n) {
-                            const rK = "RAW_" + rawMat.n.toLowerCase(); 
-                            if (!inv[rK]) inv[rK] = { c: 'Raw', n: rawMat.n, in: 0, out: 0 }; 
+                            const rK = "RAW_" + rawMat.n.toLowerCase();
+                            if (!inv[rK]) inv[rK] = { c: 'Raw', n: rawMat.n, in: 0, out: 0 };
                             inv[rK].out += parseFloat(rawMat.q) || 0;
                         }
                     });
                 } else if (p.rn) { // Old format for backward compatibility
-                    const rK = "RAW_" + p.rn.toLowerCase(); 
-                    if (!inv[rK]) inv[rK] = { c: 'Raw', n: p.rn, in: 0, out: 0 }; 
+                    const rK = "RAW_" + p.rn.toLowerCase();
+                    if (!inv[rK]) inv[rK] = { c: 'Raw', n: p.rn, in: 0, out: 0 };
                     inv[rK].out += parseFloat(p.rq) || 0;
                 }
-                const fK = "FIN_" + p.n.toLowerCase(); 
-                if (!inv[fK]) inv[fK] = { c: 'Finished', n: p.n, in: 0, out: 0 }; 
+                const category = p.cat || "General";
+                const size = p.size || "NA";
+
+                const fK = "FIN_" + p.n.toLowerCase() + "_" + category + "_" + size;
+
+                if (!inv[fK]) {
+                    inv[fK] = {
+                        c: 'Finished',
+                        n: p.n,
+                        cat: category,
+                        size: size,
+                        in: 0,
+                        out: 0
+                    };
+                }
+
                 inv[fK].in += parseFloat(p.q) || 0;
             }
         });
-        
-        user.sale.forEach(s => { 
+
+        user.sale.forEach(s => {
             if (s && s.n) {
-                const fK = "FIN_" + s.n.toLowerCase(); 
-                if (!inv[fK]) inv[fK] = { c: 'Finished', n: s.n, in: 0, out: 0 }; 
+                const category = s.cat || "General";
+                const size = s.size || "NA";
+
+                const fK = "FIN_" + s.n.toLowerCase() + "_" + category + "_" + size;
+
+                if (!inv[fK]) {
+                    inv[fK] = {
+                        c: 'Finished',
+                        n: s.n,
+                        cat: category,
+                        size: size,
+                        in: 0,
+                        out: 0
+                    };
+                }
+
                 inv[fK].out += parseFloat(s.q) || 0;
             }
         });
     } catch (e) {
         console.error("Error calculating inventory:", e);
     }
-    
+
     return inv;
 }
 
@@ -299,10 +359,10 @@ function addRawRow() {
     try {
         const rawMaterialsList = document.getElementById('rawMaterialsList');
         if (!rawMaterialsList) return;
-        
+
         const rowId = 'raw-' + Date.now();
         const inv = getInventory();
-        
+
         const rawOptions = Object.values(inv)
             .filter(item => item.c === 'Raw')
             .map(item => {
@@ -330,7 +390,7 @@ function addRawRow() {
                 </div>
             </div>
         `;
-        
+
         rawMaterialsList.insertAdjacentHTML('beforeend', htmlContent);
     } catch (e) {
         console.error("Error adding raw row:", e);
@@ -350,80 +410,51 @@ function removeRawRow(rowId) {
 
 // Save production with multiple raw materials
 function saveProd() {
-    try {
-        if (!pDate || !pName || !pQty) {
-            alert("Form elements not loaded. Please refresh the page.");
-            return;
-        }
+    if (!pDate.value || !pName.value || !pQty.value || !pCategory.value || !pSize.value) {
+        alert("Please fill all production details");
+        return;
+    }
 
-        if (!pDate.value || !pName.value || !pQty.value) {
-            alert("Please fill in Date, Product Name, and Qty Produced");
-            return;
-        }
+    const rawRows = document.querySelectorAll('.raw-row');
+    if (rawRows.length === 0) {
+        alert("Please add at least one raw material");
+        return;
+    }
 
-        const rawRows = document.querySelectorAll('.raw-row');
-        if (rawRows.length === 0) {
-            alert("Please add at least one raw material");
-            return;
-        }
+    const rawMaterials = [];
 
-        const rawMaterials = [];
-        let isValid = true;
+    rawRows.forEach(row => {
+        const rawSelect = row.querySelector('.raw-select');
+        const rawQty = row.querySelector('.raw-qty');
 
-        rawRows.forEach(row => {
-            const rawSelect = row.querySelector('.raw-select');
-            const rawQty = row.querySelector('.raw-qty');
-
-            if (!rawSelect.value || !rawQty.value) {
-                isValid = false;
-                return;
-            }
-
+        if (rawSelect.value && rawQty.value) {
             rawMaterials.push({
                 n: rawSelect.value,
                 q: parseFloat(rawQty.value)
             });
-        });
-
-        if (!isValid) {
-            alert("Please fill in all raw material fields");
-            return;
         }
+    });
 
-        const extraCost = parseFloat(pExtraCost.value) || 0;
+    user.prod.push({
+        id: Date.now(),
+        d: pDate.value,
+        n: pName.value,
+        cat: pCategory.value,
+        size: pSize.value,
+        q: parseFloat(pQty.value),
+        rm: rawMaterials,
+        ec: parseFloat(pExtraCost.value) || 0
+    });
 
-        user.prod.push({
-            id: Date.now(),
-            d: pDate.value,
-            n: pName.value,
-            q: parseFloat(pQty.value),
-            rm: rawMaterials,
-            ec: extraCost
-        });
+    pDate.value = "";
+    pName.value = "";
+    pQty.value = "";
+    pExtraCost.value = "";
+    pCategory.value = "";
+    pSize.innerHTML = '<option value="">-- Select Size --</option>';
+    document.getElementById("rawMaterialsList").innerHTML = "";
 
-        // Reset form
-        pDate.value = '';
-        pName.value = '';
-        pQty.value = '';
-        pExtraCost.value = '';
-        const rawMaterialsList = document.getElementById('rawMaterialsList');
-        if (rawMaterialsList) rawMaterialsList.innerHTML = '';
-
-        sync();
-    } catch (e) {
-        console.error("Error saving production:", e);
-        alert("Failed to save production. Please try again.");
-    }
-}
-
-function del(type, id) {
-    try {
-        user[type] = user[type].filter(i => i.id !== id);
-        sync();
-    } catch (e) {
-        console.error("Error deleting entry:", e);
-        alert("Failed to delete entry");
-    }
+    sync();
 }
 
 // Main UI Rendering function
@@ -436,7 +467,7 @@ function render() {
         const tRaw = document.getElementById('tRaw');
         const tProd = document.getElementById('tProd');
         const tSale = document.getElementById('tSale');
-        
+
         if (!tRaw || !user) return;
 
         // 1. Raw materials table with extra cost
@@ -459,13 +490,13 @@ function render() {
         if (tProd) {
             tProd.querySelector("tbody").innerHTML = user.prod.map(p => {
                 let rawUsedText = '';
-                
+
                 if (p.rm && Array.isArray(p.rm)) {
                     rawUsedText = p.rm.map(rm => `${rm.n} (${(parseFloat(rm.q) || 0).toFixed(2)})`).join(', ');
                 } else if (p.rn) {
                     rawUsedText = `${p.rn} (${(parseFloat(p.rq) || 0).toFixed(2)})`;
                 }
-                
+
                 const extraCost = parseFloat(p.ec) || 0;
                 return `<tr>
                     <td>${p.d || ''}</td>
@@ -554,10 +585,10 @@ function render() {
         const cost = user.raw.reduce((a, b) => a + (parseFloat(b.c) || 0) + (parseFloat(b.ec) || 0), 0);
         const prodExtraCost = user.prod.reduce((a, b) => a + (parseFloat(b.ec) || 0), 0);
         const sale = user.sale.reduce((a, b) => a + (parseFloat(b.a) || 0), 0);
-        
+
         if (dCost) dCost.textContent = "₹" + cost.toFixed(2);
         if (dSales) dSales.textContent = "₹" + sale.toFixed(2);
-        
+
         const totalProfit = sale - cost - prodExtraCost;
         if (dProfit) {
             dProfit.textContent = "₹" + totalProfit.toFixed(2);
@@ -594,7 +625,7 @@ function startApp() {
             const authSection = document.getElementById('authSection');
             const mainHeader = document.getElementById('mainHeader');
             const mainApp = document.getElementById('mainApp');
-            
+
             if (authSection) authSection.style.display = 'none';
             if (mainHeader) mainHeader.style.display = 'block';
             if (mainApp) mainApp.style.display = 'block';
@@ -653,33 +684,30 @@ async function saveSetup() {
         showLoading(false);
     }
 }
-
 function updateDropdowns(inventory) {
-    try {
-        const saleSelect = document.getElementById('sName');
-        if (!saleSelect) return;
+    const saleSelect = document.getElementById('sName');
+    if (!saleSelect) return;
 
-        saleSelect.innerHTML = '<option value="">-- Select Finished Product --</option>';
+    saleSelect.innerHTML = '<option value="">-- Select Finished Product --</option>';
 
-        Object.values(inventory).forEach(item => {
-            if (!item || !item.n) return;
+    Object.values(inventory).forEach(item => {
+        if (item.c === 'Finished') {
 
-            if (item.c === 'Finished') {
-                const stockLeft = (parseFloat(item.in) - parseFloat(item.out)).toFixed(2);
+            const stockLeft = (item.in - item.out).toFixed(2);
 
-                const option = document.createElement('option');
-                option.value = item.n;
-                option.textContent = `${item.n} (Stock: ${stockLeft})`;
+            const option = document.createElement('option');
+            option.value = JSON.stringify({
+                name: item.n,
+                cat: item.cat,
+                size: item.size
+            });
 
-                if (parseFloat(stockLeft) <= 0) {
-                    option.disabled = true;
-                    option.textContent += " - OUT OF STOCK";
-                }
+            option.textContent =
+                `${item.n} | ${item.cat} | Size: ${item.size} (Stock: ${stockLeft})`;
 
-                saleSelect.appendChild(option);
-            }
-        });
-    } catch (e) {
-        console.error("Error updating dropdowns:", e);
-    }
+            if (stockLeft <= 0) option.disabled = true;
+
+            saleSelect.appendChild(option);
+        }
+    });
 }
