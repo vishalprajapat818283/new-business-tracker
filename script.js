@@ -231,6 +231,34 @@ const dSales = document.getElementById('dSales');
 const dProfit = document.getElementById('dProfit');
 const stockTable = document.getElementById('stockTable');
 
+function calculateInventory() {
+    const inv = {};
+    user.raw.forEach(r => {
+        const k = `RAW_${r.n.toLowerCase()}`;
+        if (!inv[k]) inv[k] = { c: 'Raw', n: r.n, in: 0, out: 0 };
+        inv[k].in += r.q;
+    });
+    user.prod.forEach(p => {
+        const rK = `RAW_${p.mainRaw.rn.toLowerCase()}`;
+        if (!inv[rK]) inv[rK] = { c: 'Raw', n: p.mainRaw.rn, in: 0, out: 0 };
+        inv[rK].out += p.mainRaw.rq;
+        p.extraRaws.forEach(er => {
+            const erK = `RAW_${er.rn.toLowerCase()}`;
+            if (!inv[erK]) inv[erK] = { c: 'Raw', n: er.rn, in: 0, out: 0 };
+            inv[erK].out += er.rq;
+        });
+        const fK = `FIN_${p.n.toLowerCase()}`;
+        if (!inv[fK]) inv[fK] = { c: 'Finished', n: p.n, in: 0, out: 0 };
+        inv[fK].in += p.q;
+    });
+    user.sale.forEach(s => {
+        const fK = `FIN_${s.n.toLowerCase()}`;
+        if (!inv[fK]) inv[fK] = { c: 'Finished', n: s.n, in: 0, out: 0 };
+        inv[fK].out += s.q;
+    });
+    return inv;
+}
+
 function render() {
     const fRaw = document.getElementById('fRaw');
     const fProd = document.getElementById('fProd');
@@ -418,7 +446,11 @@ async function saveSetup() {
 function updateDropdowns(inventory) {
     const rawSelect = document.getElementById('pRawName');
     const saleSelect = document.getElementById('sName');
-    // Clear existing options except the first one
+    
+    // Save current selections so they don't reset while typing
+    const currentRaw = rawSelect.value;
+    const currentSale = saleSelect.value;
+
     rawSelect.innerHTML = '<option value="">-- Select Raw Material --</option>';
     saleSelect.innerHTML = '<option value="">-- Select Finished Product --</option>';
 
@@ -427,25 +459,29 @@ function updateDropdowns(inventory) {
         const option = document.createElement('option');
         option.value = item.n;
         option.textContent = `${item.n} [Stock: ${stockLeft}]`;
-        // If stock is 0 or less, disable it and turn it red
+        
         if (parseFloat(stockLeft) <= 0) {
             option.disabled = true;
             option.style.color = 'red';
-            option.textContent += ' - OUT OF STOCK';
+            option.textContent += ' - (OUT)';
         }
+
         if (item.c === 'Raw') {
             rawSelect.appendChild(option);
+            // Update any existing extra rows
+            document.querySelectorAll('.extra-raw-select').forEach(sel => {
+                const optCopy = option.cloneNode(true);
+                // We only append if not already there, but for simplicity:
+                if(sel.options.length < Object.keys(inventory).length) sel.appendChild(optCopy);
+            });
         } else {
             saleSelect.appendChild(option);
         }
-        // Also populate extra raw selects
-        document.querySelectorAll('.extra-raw-select').forEach(sel => {
-            if (sel.children.length <= 1) {  // Only if not populated
-                const extraOpt = option.cloneNode(true);
-                sel.appendChild(extraOpt);
-            }
-        });
     });
+
+    // Restore selections
+    rawSelect.value = currentRaw;
+    saleSelect.value = currentSale;
 }
 
 // New functions for extra raw rows
@@ -454,7 +490,6 @@ function addExtraRawRow() {
     const container = document.getElementById('additionalRaws');
     const row = document.createElement('div');
     row.className = 'extra-raw-row';
-    row.id = `extra-row-${++extraRowCounter}`;
     row.innerHTML = `
         <select class="extra-raw-select">
             <option value="">-- Select Raw --</option>
@@ -463,8 +498,24 @@ function addExtraRawRow() {
         <button type="button" class="btn btn-danger" onclick="removeExtraRaw(this)">Remove</button>
     `;
     container.appendChild(row);
-    // Repopulate dropdown after adding
-    setTimeout(() => updateDropdowns({}), 0);
+    
+    // RE-POPULATE: Immediately fill the new dropdown we just created
+    const inv = calculateInventory(); 
+    const newSelect = row.querySelector('.extra-raw-select');
+    
+    Object.values(inv).forEach(item => {
+        if (item.c === 'Raw') {
+            const stockLeft = (item.in - item.out).toFixed(2);
+            const option = document.createElement('option');
+            option.value = item.n;
+            option.textContent = `${item.n} [Stock: ${stockLeft}]`;
+            if (parseFloat(stockLeft) <= 0) {
+                option.disabled = true;
+                option.style.color = 'red';
+            }
+            newSelect.appendChild(option);
+        }
+    });
 }
 
 function removeExtraRaw(btn) {
