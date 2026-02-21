@@ -1,237 +1,188 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Tracker - Full Inventory Link</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Tracker - Full Inventory Link</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
+
 <body>
-    <div id="loading" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:100; justify-content:center; align-items:center; font-weight:bold;">
-        Syncing with Google Drive...
+  <div id="loading"
+    style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:100; justify-content:center; align-items:center; font-weight:bold;">
+    🔄 Syncing with Google Drive...
+  </div>
+  <div id="authSection" class="auth-container">
+    <h1 style="text-align:center;">💼 Tracker Pro</h1>
+    <p style="text-align:center; color:#6b7280;">Cloud Sync Enabled</p>
+    <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="initiateLogin()">
+      Login with Google
+    </button>
+    <div id="setupSection"
+      style="display:none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; text-align: left;">
+      <h3 style="margin-bottom:10px; font-size: 16px;">🏢 First-Time Setup</h3>
+      <label>Company Name</label>
+      <input type="text" id="setupCompany" placeholder="e.g. Vishal Traders" style="margin-bottom: 10px;">
+      <label>Owner Name</label>
+      <input type="text" id="setupOwner" placeholder="Your Name" style="margin-bottom: 15px;">
+      <button class="btn btn-primary" onclick="saveSetup()" style="width:100%;">Create Account</button>
+    </div>
+    <div id="authError" class="error-msg"></div>
+  </div>
+
+  <header id="mainHeader" style="display:none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: auto;">
+      <div>
+        <h1 id="headerTitle">Company</h1>
+        <div id="liveTime" style="font-size: 14px; margin-top: 5px; color: #9ca3af;"></div>
+      </div>
+      <button class="btn btn-danger" onclick="location.reload()">Logout</button>
+    </div>
+  </header>
+
+  <div class="container" id="mainApp" style="display:none;">
+    <div class="tabs">
+      <button class="tab-btn active" data-target="dashboard">Dashboard</button>
+      <button class="tab-btn" data-target="rawSection">Raw Material</button>
+      <button class="tab-btn" data-target="prodSection">Production</button>
+      <button class="tab-btn" data-target="saleSection">Sales</button>
     </div>
 
-    <div id="authSection" class="auth-container">
-        <h1 style="text-align:center;">Tracker Pro</h1>
-        <p style="text-align:center; color:#6b7280;">Cloud Sync Enabled</p>
-        <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="initiateLogin()">Login with Google</button>
-        
-        <div id="setupSection" style="display:none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; text-align: left;">
-            <h3 style="margin-bottom:10px; font-size: 16px;">First-Time Setup</h3>
-            <label>Company Name</label>
-            <input type="text" id="setupCompany" placeholder="e.g. Vishal Traders" style="margin-bottom: 10px;">
-            <label>Owner Name</label>
-            <input type="text" id="setupOwner" placeholder="Your Name" style="margin-bottom: 15px;">
-            <button class="btn btn-primary" onclick="saveSetup()" style="width:100%;">Create Account</button>
+    <section id="dashboard" class="active">
+      <div class="cards">
+        <div class="card">
+          <div class="card-title">Net Profit</div>
+          <div class="card-value" id="dProfit">₹0</div>
         </div>
-        <div id="authError" class="error-msg"></div>
-    </div>
-
-    <div id="mainHeader" style="display:none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: auto;">
-            <div>
-                <h1 id="headerTitle">Company</h1>
-                <div id="liveTime" style="font-size: 14px; margin-top: 5px; color: #9ca3af;"></div>
-            </div>
-            <button class="btn btn-danger" onclick="location.reload()">Logout</button>
+        <div class="card">
+          <div class="card-title">Total Sales</div>
+          <div class="card-value" id="dSales">₹0</div>
         </div>
-    </div>
-
-    <div class="container" id="mainApp" style="display:none;">
-        <div class="tabs">
-            <button class="tab-btn active" data-target="dashboard">Dashboard</button>
-            <button class="tab-btn" data-target="rawSection">Raw Material</button>
-            <button class="tab-btn" data-target="prodSection">Production</button>
-            <button class="tab-btn" data-target="saleSection">Sales</button>
+        <div class="card">
+          <div class="card-title">Total Raw Cost</div>
+          <div class="card-value" id="dCost">₹0</div>
         </div>
+      </div>
 
-        <section id="dashboard" class="active">
-            <div class="cards">
-                <div class="card">
-                    <div class="card-title">Net Profit</div>
-                    <div class="card-value" id="dProfit">$0</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Total Sales</div>
-                    <div class="card-value" id="dSales">$0</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Total Raw Cost</div>
-                    <div class="card-value" id="dCost">$0</div>
-                </div>
-            </div>
+      <h3>📦 Real-Time Stock Status</h3>
+      <table id="stockTable">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Item Name</th>
+            <th>Total In</th>
+            <th>Total Out</th>
+            <th>Remains</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
 
-            <h3>Real-Time Stock Status</h3>
-            <table id="stockTable">
-                <thead>
-                    <tr>
-                        <th>Category</th>
-                        <th>Item Name</th>
-                        <th>Total In</th>
-                        <th>Total Out</th>
-                        <th>Remains</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+      <h3 style="margin-top:20px;">📜 All Activity Entries</h3>
+      <table id="activityTable">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
 
-            <h3 style="margin-top:20px;">All Activity Entries</h3>
-            <table id="activityTable">
-                <thead>
-                    <tr>
-                        <th>Type</th>
-                        <th>Date</th>
-                        <th>Item</th>
-                        <th>Qty</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </section>
+    <section id="rawSection">
+      <h2>Raw Material Collection</h2>
+      <form id="fRaw">
+        <div><label>Date</label><input type="date" id="riDate" required></div>
+        <div><label>Material Name</label><input type="text" id="riName" required></div>
+        <div><label>Qty Inward</label><input type="number" id="riQty" step="0.01" required></div>
+        <div><label>Total Cost</label><input type="number" id="riCost" step="0.01" required></div>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </form>
+      <table id="tRaw">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Material</th>
+            <th>Qty</th>
+            <th>Cost</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
 
-        <section id="rawSection">
-            <h2>Raw Material Collection</h2>
-            <form id="fRaw">
-                <div>
-                    <label>Date</label>
-                    <input type="date" id="riDate" required>
-                </div>
-                <div>
-                    <label>Material Name</label>
-                    <input type="text" id="riName" required>
-                </div>
-                <div>
-                    <label>Qty Inward</label>
-                    <input type="number" id="riQty" step="0.01" required>
-                </div>
-                <div>
-                    <label>Total Cost</label>
-                    <input type="number" id="riCost" step="0.01" required>
-                </div>
-                <div>
-                    <label>Extra Cost (Optional)</label>
-                    <input type="number" id="riExtraCost" step="0.01" placeholder="e.g. transport">
-                </div>
-                <button type="submit" class="btn btn-primary">Save</button>
-            </form>
-            <table id="tRaw">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Material</th>
-                        <th>Qty</th>
-                        <th>Cost</th>
-                        <th>Extra Cost</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </section>
+    <section id="prodSection">
+      <h2>Production & Raw Usage</h2>
+      <form id="fProd">
+        <div><label>Date</label><input type="date" id="pDate" required></div>
+        <div><label>Product Name</label><input type="text" id="pName" required></div>
+        <div><label>Qty Produced</label><input type="number" id="pQty" step="0.01" required></div>
+        <div class="highlight-box">
+          <label>Raw Used (Select from Stock)</label>
+          <select id="pRawName" required>
+            <option value="">-- Select Raw Material --</option>
+          </select>
+        </div>
+        <div class="highlight-box"><label>Raw Used (Qty)</label><input type="number" id="pRawQty" step="0.01" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Save Production</button>
+      </form>
+      <table id="tProd">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Raw Used</th>
+            <th>Usage Qty</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
 
-        <section id="prodSection">
-            <h2>Production Raw Usage</h2>
-            <form id="fProd">
-                <div>
-                    <label>Date</label>
-                    <input type="date" id="pDate" required>
-                </div>
-                <div>
-                    <label>Product Name</label>
-                    <input type="text" id="pName" required>
-                </div>
-                <div>
-                    <label>Qty Produced</label>
-                    <input type="number" id="pQty" step="0.01" required>
-                </div>
-                <div class="highlight-box">
-                    <label>Raw Used (Select from Stock)</label>
-                    <select id="pRawName" required>
-                        <option value="">-- Select Raw Material --</option>
-                    </select>
-                </div>
-                <div class="highlight-box">
-                    <label>Raw Used Qty</label>
-                    <input type="number" id="pRawQty" step="0.01" required>
-                </div>
-                <!-- New multiple raw support -->
-                <div id="additionalRaws">
-                    <h4 style="margin: 10px 0; font-size: 14px;">Additional Raw Materials (Optional)</h4>
-                    <div class="extra-raw-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: end;">
-                        <select class="extra-raw-select" style="flex: 1;">
-                            <option value="">-- Select Raw --</option>
-                        </select>
-                        <input type="number" class="extra-raw-qty" step="0.01" placeholder="Qty" style="flex: 1;">
-                        <button type="button" class="btn btn-danger" onclick="removeExtraRaw(this)" style="flex: 0 0 auto;">Remove</button>
-                    </div>
-                </div>
-                <button type="button" onclick="addExtraRawRow()" class="btn" style="background: #10b981; color: white; margin-bottom: 10px;">+ Add Extra Raw</button>
-                <div>
-                    <label>Extra Production Cost (Optional)</label>
-                    <input type="number" id="pExtraCost" step="0.01" placeholder="e.g. labor, electricity">
-                </div>
-                <button type="submit" class="btn btn-primary">Save Production</button>
-            </form>
-            <table id="tProd">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Product</th>
-                        <th>Qty</th>
-                        <th>Raw Used</th>
-                        <th>Extra Raws</th>
-                        <th>Extra Cost</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </section>
-
-        <section id="saleSection">
-            <h2>Sales Record</h2>
-            <form id="fSale">
-                <div>
-                    <label>Date</label>
-                    <input type="date" id="sDate" required>
-                </div>
-                <div>
-                    <label>Product Name (Select from Stock)</label>
-                    <select id="sName" required>
-                        <option value="">-- Select Finished Product --</option>
-                    </select>
-                </div>
-                <div>
-                    <label>Qty Sold</label>
-                    <input type="number" id="sQty" step="0.01" required>
-                </div>
-                <div>
-                    <label>Sale Amount</label>
-                    <input type="number" id="sAmt" step="0.01" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Save Sale</button>
-            </form>
-            <table id="tSale">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Product</th>
-                        <th>Qty</th>
-                        <th>Amount</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </section>
+    <section id="saleSection">
+      <h2>Sales Record</h2>
+      <form id="fSale">
+        <div><label>Date</label><input type="date" id="sDate" required></div>
+        <div>
+          <label>Product Name (Select from Stock)</label>
+          <select id="sName" required>
+            <option value="">-- Select Finished Product --</option>
+          </select>
+        </div>
+        <div><label>Qty Sold</label><input type="number" id="sQty" step="0.01" required></div>
+        <div><label>Sale Amount</label><input type="number" id="sAmt" step="0.01" required></div>
+        <button type="submit" class="btn btn-primary">Save Sale</button>
+      </form>
+      <table id="tSale">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Amount</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </div>
+  <div id="footer">
+    <div class="text">created by
+      <a href="https://www.linkedin.com/in/vishal-prajapati-aa754b3a9">vishal prajapati</a>
     </div>
-
-    <div id="footer">
-        <div class="text">created by <a href="https://www.linkedin.com/in/vishal-prajapati-aa754b3a9/">vishal prajapati</a></div>
-    </div>
-
-    <script src="script.js"></script>
+  </div>
+  <script src="script.js"></script>
 </body>
+
 </html>
