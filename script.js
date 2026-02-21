@@ -715,3 +715,21 @@ function updateDropdowns(inventory) {
         }
     });
 }
+
+function del(type, id) {
+    if (!confirm("Are you sure you want to delete this entry?")) return;
+
+    if (type === 'raw') {
+        user.raw = user.raw.filter(item => item.id !== id);
+    }
+
+    if (type === 'prod') {
+        user.prod = user.prod.filter(item => item.id !== id);
+    }
+
+    if (type === 'sale') {
+        user.sale = user.sale.filter(item => item.id !== id);
+    }
+
+    sync(); // re-render + cloud update
+}
