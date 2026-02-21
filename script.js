@@ -78,7 +78,7 @@ async function loadFromCloud() {
         }
     } finally {
     showLoading(false);  // Force hide after 10s max
-    setTimeout(startApp, 10000);  // Emergency dashboard
+    // setTimeout(startApp, 10000);  // Emergency dashboard
 }
 
 }
@@ -469,3 +469,4 @@ function addExtraRawRow() {
 function removeExtraRaw(btn) {
     btn.closest('.extra-raw-row').remove();
 }
+
