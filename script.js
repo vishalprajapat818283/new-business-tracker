@@ -8,9 +8,9 @@ let fileId = null;
 let pCategory, pSize;
 
 const sizeMap = {
-    Child: ["4", "5", "6"],
-    Male: ["6", "7", "8", "9", "10"],
-    Female: ["4", "5", "6", "7", "8"]
+    Child: ["3","4", "5", "6","7","8","9","10"],
+    Male: ["3","4", "5", "6","7","8","9","10"],
+    Female: ["3","4", "5", "6","7","8","9","10"]
 };
 let user = {
     raw: [],
@@ -733,3 +733,4 @@ function del(type, id) {
 
     sync(); // re-render + cloud update
 }
+
