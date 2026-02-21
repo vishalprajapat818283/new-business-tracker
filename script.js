@@ -233,24 +233,31 @@ const stockTable = document.getElementById('stockTable');
 
 function calculateInventory() {
     const inv = {};
+    // Process Raw Materials
     user.raw.forEach(r => {
         const k = `RAW_${r.n.toLowerCase()}`;
         if (!inv[k]) inv[k] = { c: 'Raw', n: r.n, in: 0, out: 0 };
         inv[k].in += r.q;
     });
+    // Process Production (Usage)
     user.prod.forEach(p => {
-        const rK = `RAW_${p.mainRaw.rn.toLowerCase()}`;
-        if (!inv[rK]) inv[rK] = { c: 'Raw', n: p.mainRaw.rn, in: 0, out: 0 };
-        inv[rK].out += p.mainRaw.rq;
+        if (p.mainRaw && p.mainRaw.rn) {
+            const rK = `RAW_${p.mainRaw.rn.toLowerCase()}`;
+            if (!inv[rK]) inv[rK] = { c: 'Raw', n: p.mainRaw.rn, in: 0, out: 0 };
+            inv[rK].out += p.mainRaw.rq;
+        }
+        // Extra Raws Usage
         p.extraRaws.forEach(er => {
             const erK = `RAW_${er.rn.toLowerCase()}`;
             if (!inv[erK]) inv[erK] = { c: 'Raw', n: er.rn, in: 0, out: 0 };
             inv[erK].out += er.rq;
         });
+        // Finished Product Inward
         const fK = `FIN_${p.n.toLowerCase()}`;
         if (!inv[fK]) inv[fK] = { c: 'Finished', n: p.n, in: 0, out: 0 };
         inv[fK].in += p.q;
     });
+    // Process Sales
     user.sale.forEach(s => {
         const fK = `FIN_${s.n.toLowerCase()}`;
         if (!inv[fK]) inv[fK] = { c: 'Finished', n: s.n, in: 0, out: 0 };
@@ -260,122 +267,48 @@ function calculateInventory() {
 }
 
 function render() {
-    const fRaw = document.getElementById('fRaw');
-    const fProd = document.getElementById('fProd');
-    const fSale = document.getElementById('fSale');
     const tRaw = document.getElementById('tRaw');
     const tProd = document.getElementById('tProd');
     const tSale = document.getElementById('tSale');
 
-    if (!tRaw || !user) return; // Safety check
+    if (!tRaw || !user) return;
 
-    // 1. Raw, Production, aur Sales tables ko update karein
+    // Update Tables
     tRaw.querySelector('tbody').innerHTML = user.raw.map(r =>
-        `<tr>
-            <td>${r.d}</td>
-            <td>${r.n}</td>
-            <td>${r.q}</td>
-            <td>${r.c}</td>
-            <td>${r.ec.toFixed(2)}</td>
-            <td><button onclick="del('raw',${r.id})">Del</button></td>
-        </tr>`
+        `<tr><td>${r.d}</td><td>${r.n}</td><td>${r.q}</td><td>${r.c}</td><td>${r.ec.toFixed(2)}</td><td><button onclick="del('raw',${r.id})">Del</button></td></tr>`
     ).join('');
 
     tProd.querySelector('tbody').innerHTML = user.prod.map(p =>
-        `<tr>
-            <td>${p.d}</td>
-            <td>${p.n}</td>
-            <td>${p.q}</td>
-            <td>${p.mainRaw.rn} (${p.mainRaw.rq})</td>
-            <td>${p.extraRaws.map(er => er.rn + ' (' + er.rq + ')').join(', ') || '-'}</td>
-            <td>${p.ec.toFixed(2)}</td>
-            <td><button onclick="del('prod',${p.id})">Del</button></td>
-        </tr>`
+        `<tr><td>${p.d}</td><td>${p.n}</td><td>${p.q}</td><td>${p.mainRaw.rn} (${p.mainRaw.rq})</td><td>${p.extraRaws.map(er => er.rn + ' (' + er.rq + ')').join(', ') || '-'}</td><td>${p.ec.toFixed(2)}</td><td><button onclick="del('prod',${p.id})">Del</button></td></tr>`
     ).join('');
 
     tSale.querySelector('tbody').innerHTML = user.sale.map(s =>
-        `<tr>
-            <td>${s.d}</td>
-            <td>${s.n}</td>
-            <td>${s.q}</td>
-            <td>${s.a}</td>
-            <td><button onclick="del('sale',${s.id})">Del</button></td>
-        </tr>`
+        `<tr><td>${s.d}</td><td>${s.n}</td><td>${s.q}</td><td>${s.a}</td><td><button onclick="del('sale',${s.id})">Del</button></td></tr>`
     ).join('');
 
-    // 2. DASHBOARD ALL ACTIVITY ENTRIES - Combining all arrays
-    const allActivities = [
-        ...user.raw.map(r => ({ type: 'Raw', d: r.d, n: r.n, q: r.q, det: `Cost ${r.c} + Extra ${r.ec}` })),
-        ...user.prod.map(p => ({ type: 'Prod', d: p.d, n: p.n, q: p.q, det: `Used ${p.mainRaw.rn} ${p.mainRaw.rq} + Extra Cost ${p.ec}` })),
-        ...user.sale.map(s => ({ type: 'Sale', d: s.d, n: s.n, q: s.q, det: `Amt ${s.a}` }))
-    ];
-    // Newest entries top par dikhane ke liye sort karein
-    allActivities.sort((a, b) => new Date(b.d) - new Date(a.d));
-    const activityTableBody = document.querySelector('#activityTable tbody');
-    if (activityTableBody) {
-        activityTableBody.innerHTML = allActivities.map(a =>
-            `<tr>
-                <td><strong>${a.type}</strong></td>
-                <td>${a.d}</td>
-                <td>${a.n}</td>
-                <td>${a.q}</td>
-                <td>${a.det}</td>
-            </tr>`
-        ).join('');
-    }
+    // Calculate Inventory First
+    const inv = calculateInventory(); 
+    
+    // Update Dashboard Activity
+    updateActivityTable();
 
-    // 3. INVENTORY LOGIC - Stock Status
-    const inv = {};
-    user.raw.forEach(r => {
-        const k = `RAW_${r.n.toLowerCase()}`;
-        if (!inv[k]) inv[k] = { c: 'Raw', n: r.n, in: 0, out: 0 };
-        inv[k].in += r.q;
-    });
-    user.prod.forEach(p => {
-        // Main raw out
-        const rK = `RAW_${p.mainRaw.rn.toLowerCase()}`;
-        if (!inv[rK]) inv[rK] = { c: 'Raw', n: p.mainRaw.rn, in: 0, out: 0 };
-        inv[rK].out += p.mainRaw.rq;
-        // Extra raws out
-        p.extraRaws.forEach(er => {
-            const erK = `RAW_${er.rn.toLowerCase()}`;
-            if (!inv[erK]) inv[erK] = { c: 'Raw', n: er.rn, in: 0, out: 0 };
-            inv[erK].out += er.rq;
-        });
-        // Finished product in
-        const fK = `FIN_${p.n.toLowerCase()}`;
-        if (!inv[fK]) inv[fK] = { c: 'Finished', n: p.n, in: 0, out: 0 };
-        inv[fK].in += p.q;
-    });
-    user.sale.forEach(s => {
-        const fK = `FIN_${s.n.toLowerCase()}`;
-        if (!inv[fK]) inv[fK] = { c: 'Finished', n: s.n, in: 0, out: 0 };
-        inv[fK].out += s.q;
-    });
-
+    // Update Stock Table
     stockTable.querySelector('tbody').innerHTML = Object.values(inv).map(i =>
-        `<tr>
-            <td>${i.c}</td>
-            <td>${i.n}</td>
-            <td>${i.in.toFixed(2)}</td>
-            <td>${i.out.toFixed(2)}</td>
-            <td style="font-weight:bold; color:${(i.in - i.out) <= 0 ? 'red' : 'green'}">${(i.in - i.out).toFixed(2)}</td>
-        </tr>`
+        `<tr><td>${i.c}</td><td>${i.n}</td><td>${i.in.toFixed(2)}</td><td>${i.out.toFixed(2)}</td><td style="font-weight:bold; color:${(i.in - i.out) <= 0 ? 'red' : 'green'}">${(i.in - i.out).toFixed(2)}</td></tr>`
     ).join('');
 
-    // Add this inside the render function near the end:
+    // CRITICAL: Update dropdowns using the calculated inventory
     updateDropdowns(inv);
 
-    // 4. TOP CARDS - Profit, Sales, Cost (UPDATED TO INCLUDE EXTRA COSTS)
-    const rawCost = user.raw.reduce((a, b) => a + b.c + b.ec, 0);  // Raw costs + extra
-    const prodExtraCost = user.prod.reduce((a, b) => a + b.ec, 0);  // Production extra costs
+    // Update Totals
+    const rawCost = user.raw.reduce((a, b) => a + b.c + b.ec, 0);
+    const prodExtraCost = user.prod.reduce((a, b) => a + b.ec, 0);
     const totalCost = rawCost + prodExtraCost;
     const saleTotal = user.sale.reduce((a, b) => a + b.a, 0);
 
     dCost.textContent = `$${totalCost.toFixed(2)}`;
     dSales.textContent = `$${saleTotal.toFixed(2)}`;
     dProfit.textContent = `$${(saleTotal - totalCost).toFixed(2)}`;
-    dProfit.className = `card-value ${saleTotal - totalCost >= 0 ? 'profit' : 'loss'}`;
 }
 
 // Live Clock ko update karne ka function
@@ -490,32 +423,19 @@ function addExtraRawRow() {
     const container = document.getElementById('additionalRaws');
     const row = document.createElement('div');
     row.className = 'extra-raw-row';
+    row.style = "display: flex; gap: 10px; margin-bottom: 10px; align-items: end;";
+    
     row.innerHTML = `
-        <select class="extra-raw-select">
+        <select class="extra-raw-select" style="flex: 1;">
             <option value="">-- Select Raw --</option>
         </select>
-        <input type="number" class="extra-raw-qty" step="0.01" placeholder="Qty">
-        <button type="button" class="btn btn-danger" onclick="removeExtraRaw(this)">Remove</button>
+        <input type="number" class="extra-raw-qty" step="0.01" placeholder="Qty" style="flex: 1;">
+        <button type="button" class="btn btn-danger" onclick="removeExtraRaw(this)" style="flex: 0 0 auto;">Remove</button>
     `;
     container.appendChild(row);
     
-    // RE-POPULATE: Immediately fill the new dropdown we just created
-    const inv = calculateInventory(); 
-    const newSelect = row.querySelector('.extra-raw-select');
-    
-    Object.values(inv).forEach(item => {
-        if (item.c === 'Raw') {
-            const stockLeft = (item.in - item.out).toFixed(2);
-            const option = document.createElement('option');
-            option.value = item.n;
-            option.textContent = `${item.n} [Stock: ${stockLeft}]`;
-            if (parseFloat(stockLeft) <= 0) {
-                option.disabled = true;
-                option.style.color = 'red';
-            }
-            newSelect.appendChild(option);
-        }
-    });
+    // Refresh the whole app UI to fill the new dropdown
+    render(); 
 }
 
 function removeExtraRaw(btn) {
