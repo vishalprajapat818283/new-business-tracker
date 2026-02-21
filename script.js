@@ -103,22 +103,29 @@ async function createCloudFile() {
 
 // Global Sync function - pushes current user object to Drive
 async function sync() {
-    // SAFETY LOCK: 1. Must have a token and fileId... 2. Must NOT sync if isSetupDone is still false (meaning data hasn't loaded yet)
+    // Skip cloud if not ready - JUST RENDER INSTANTLY
+    render();  // This was missing!
+    
     if (!accessToken || !fileId || !user.isSetupDone) {
-        console.log('Sync skipped - Data not fully loaded or setup incomplete.');
+        console.log('Cloud sync skipped - UI updated');
         return;
     }
-    try {
-        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-            method: 'PATCH',
-            headers: { Authorization: `Bearer ${accessToken}` },
-            body: new Blob(JSON.stringify(user), { type: 'application/json' })
-        });
-        console.log('Cloud Synced Successfully.');
-    } catch (e) {
-        console.warn('Sync failed. Will retry on next entry.', e);
-    }
+    
+    // Background cloud (non-blocking)
+    setTimeout(async () => {
+        try {
+            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${accessToken}` },
+                body: new Blob([JSON.stringify(user)], { type: 'application/json' })
+            });
+            console.log('✅ Cloud saved');
+        } catch(e) {
+            console.log('Cloud failed - data safe locally');
+        }
+    }, 200);
 }
+
 
 // --- 3. UI FORM LOGIC ---
 function logout() {
