@@ -1,30 +1,11 @@
 // --- CONFIGURATION ---
-// 1. Paste your Client ID from Google Cloud Console here
 const CLIENT_ID = '330273087572-bb5h0ob2ahu56h93sac7hvf07je6uha7.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
-window.onload = () => {
-  const savedToken = localStorage.getItem("btcloud_token");
-
-  // By default, show login
-  const auth = document.getElementById("authSection");
-  if (auth) auth.style.display = "block";
-
-  if (savedToken) {
-    accessToken = savedToken;
-    loadFromCloud().catch(() => {
-      // If cloud load fails, keep login visible instead of blank screen
-      localStorage.removeItem("btcloud_token");
-      if (auth) auth.style.display = "block";
-    });
-  }
-};
-
 
 let tokenClient;
 let accessToken = null;
 let fileId = null;
 
-// 1.being on top
 let user = {
     raw: [],
     prod: [],
@@ -34,28 +15,129 @@ let user = {
     isSetupDone: false
 };
 
-// --- 1. INITIALIZATION & LOGIN ---
+// Global variable to track raw materials for current production
+let tempRawMaterials = [];
 
-// This runs as soon as the page loads
+// DOM Elements - Define all references upfront
+let fRaw, fProd, fSale;
+let riDate, riName, riQty, riCost, riExtraCost;
+let pDate, pName, pQty, pExtraCost;
+let sDate, sName, sQty, sAmt;
 
-function initiateLogin() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (response) => {
-            if (response.error) {
-                console.error("Login Error:", response.error);
-                return;
+// Initialize DOM references after DOM loads
+function initDOMReferences() {
+    fRaw = document.getElementById('fRaw');
+    riDate = document.getElementById('riDate');
+    riName = document.getElementById('riName');
+    riQty = document.getElementById('riQty');
+    riCost = document.getElementById('riCost');
+    riExtraCost = document.getElementById('riExtraCost');
+    
+    pDate = document.getElementById('pDate');
+    pName = document.getElementById('pName');
+    pQty = document.getElementById('pQty');
+    pExtraCost = document.getElementById('pExtraCost');
+    
+    fSale = document.getElementById('fSale');
+    sDate = document.getElementById('sDate');
+    sName = document.getElementById('sName');
+    sQty = document.getElementById('sQty');
+    sAmt = document.getElementById('sAmt');
+    
+    // Attach event listeners
+    if (fRaw) {
+        fRaw.onsubmit = (e) => {
+            e.preventDefault();
+            const extraCost = parseFloat(riExtraCost.value) || 0;
+            user.raw.push({ 
+                id: Date.now(), 
+                d: riDate.value, 
+                n: riName.value, 
+                q: parseFloat(riQty.value) || 0, 
+                c: parseFloat(riCost.value) || 0,
+                ec: extraCost
+            });
+            fRaw.reset();
+            sync();
+        };
+    }
+
+    if (fSale) {
+        fSale.onsubmit = (e) => {
+            e.preventDefault();
+            user.sale.push({ 
+                id: Date.now(), 
+                d: sDate.value, 
+                n: sName.value, 
+                q: parseFloat(sQty.value) || 0, 
+                a: parseFloat(sAmt.value) || 0 
+            });
+            fSale.reset();
+            if (sName) sName.selectedIndex = 0;
+            sync();
+        };
+    }
+
+    // Tab switching
+    document.querySelectorAll(".tab-btn").forEach(b => {
+        b.onclick = () => {
+            document.querySelectorAll(".tab-btn, section").forEach(e => e.classList.remove("active"));
+            b.classList.add("active");
+            const targetSection = document.getElementById(b.dataset.target);
+            if (targetSection) targetSection.classList.add("active");
+            
+            // Initialize raw materials block when switching to production
+            if (b.dataset.target === 'prodSection') {
+                const rawMaterialsList = document.getElementById('rawMaterialsList');
+                if (rawMaterialsList && rawMaterialsList.innerHTML.trim() === '') {
+                    addRawRow();
+                }
             }
-            accessToken = response.access_token;
-            localStorage.setItem('bt_cloud_token', accessToken);
-            loadFromCloud();
-        },
+        }
     });
-    tokenClient.requestAccessToken();
 }
 
-// --- 2. GOOGLE DRIVE API OPERATIONS ---
+window.onload = () => {
+    initDOMReferences();
+    const savedToken = localStorage.getItem("btcloud_token");
+    const auth = document.getElementById("authSection");
+    
+    if (auth) auth.style.display = "block";
+
+    if (savedToken) {
+        accessToken = savedToken;
+        loadFromCloud().catch((err) => {
+            console.error("Failed to load from cloud:", err);
+            localStorage.removeItem("btcloud_token");
+            if (auth) auth.style.display = "block";
+        });
+    }
+};
+
+// --- GOOGLE DRIVE API OPERATIONS ---
+
+function initiateLogin() {
+    try {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: (response) => {
+                if (response.error) {
+                    console.error("Login Error:", response.error);
+                    alert("Login failed: " + response.error);
+                    return;
+                }
+                accessToken = response.access_token;
+                localStorage.setItem('btcloud_token', accessToken);
+                loadFromCloud();
+            },
+        });
+        tokenClient.requestAccessToken();
+    } catch (e) {
+        console.error("Token client error:", e);
+        alert("Google login failed. Please try again.");
+    }
+}
 
 async function loadFromCloud() {
     showLoading(true);
@@ -63,6 +145,9 @@ async function loadFromCloud() {
         const res = await fetch('https://www.googleapis.com/drive/v3/files?q=name="tracker_data.json"&spaces=appDataFolder&fields=files(id, name)', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
+        
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        
         const list = await res.json();
 
         if (list.files && list.files.length > 0) {
@@ -71,27 +156,28 @@ async function loadFromCloud() {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
 
+            if (!content.ok) throw new Error(`Failed to fetch file: ${content.status}`);
+            
             const cloudData = await content.json();
 
-            // Check if cloud data is valid before applying it
             if (cloudData && (cloudData.isSetupDone || cloudData.raw)) {
                 user = cloudData;
                 console.log("Data recovered from Cloud.");
             }
         } else {
             console.log("New user: No existing file found.");
-            fileId = null; // Ensure fileId is null so saveSetup knows to create a new one
+            fileId = null;
         }
 
-        // Only start the app AFTER we are sure about the cloud data
         startApp();
 
     } catch (e) {
         console.error("Cloud Error:", e);
-        // If 401 (expired session), clear and login again
-        if (e.status === 401) {
-            localStorage.removeItem('bt_cloud_token');
+        if (e.toString().includes('401')) {
+            localStorage.removeItem('btcloud_token');
             location.reload();
+        } else {
+            alert("Failed to sync with cloud. Check your internet connection.");
         }
     } finally {
         showLoading(false);
@@ -99,52 +185,59 @@ async function loadFromCloud() {
 }
 
 async function createCloudFile() {
-    const metadata = {
-        name: 'tracker_data.json',
-        parents: ['appDataFolder']
-    };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', new Blob([JSON.stringify(user)], { type: 'application/json' }));
+    try {
+        const metadata = {
+            name: 'tracker_data.json',
+            parents: ['appDataFolder']
+        };
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([JSON.stringify(user)], { type: 'application/json' }));
 
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: form
-    });
-    const data = await res.json();
-    fileId = data.id;
+        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: form
+        });
+        
+        if (!res.ok) throw new Error(`Failed to create file: ${res.status}`);
+        
+        const data = await res.json();
+        fileId = data.id;
+        console.log("Cloud file created successfully.");
+    } catch (e) {
+        console.error("Error creating cloud file:", e);
+        alert("Failed to create cloud file. Please try again.");
+    }
 }
 
-// Global Sync function - pushes current 'user' object to Drive
 async function sync() {
     render();
-    // SAFETY LOCK: 
-    // 1. Must have a token and fileId
-    // 2. Must NOT sync if isSetupDone is still false (meaning data hasn't loaded yet)
+    
     if (!accessToken || !fileId || !user.isSetupDone) {
         console.log("Sync skipped: Data not fully loaded or setup incomplete.");
         return;
     }
 
     try {
-        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
             method: 'PATCH',
             headers: { Authorization: `Bearer ${accessToken}` },
             body: new Blob([JSON.stringify(user)], { type: 'application/json' })
         });
+        
+        if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
+        
         console.log("Cloud Synced Successfully.");
     } catch (e) {
-        console.warn("Sync failed. Will retry on next entry.");
+        console.warn("Sync failed:", e);
     }
 }
 
-// --- 3. UI & FORM LOGIC ---
-
-
+// --- UI FUNCTIONS ---
 
 function logout() {
-    localStorage.removeItem('bt_cloud_token');
+    localStorage.removeItem('btcloud_token');
     location.reload();
 }
 
@@ -153,218 +246,440 @@ function showLoading(show) {
     if (loader) loader.style.display = show ? 'flex' : 'none';
 }
 
-// Form Submission Handlers
-fRaw.onsubmit = (e) => {
-    e.preventDefault();
-    user.raw.push({ id: Date.now(), d: riDate.value, n: riName.value, q: +riQty.value, c: +riCost.value });
-    e.target.reset();
-    sync();
-};
+// Get inventory - helper function with defensive checks
+function getInventory() {
+    const inv = {};
+    
+    try {
+        user.raw.forEach(r => { 
+            if (r && r.n) {
+                const k = "RAW_" + r.n.toLowerCase(); 
+                if (!inv[k]) inv[k] = { c: 'Raw', n: r.n, in: 0, out: 0 }; 
+                inv[k].in += parseFloat(r.q) || 0; 
+            }
+        });
+        
+        user.prod.forEach(p => {
+            if (p && p.n) {
+                if (p.rm && Array.isArray(p.rm)) { // New format
+                    p.rm.forEach(rawMat => {
+                        if (rawMat && rawMat.n) {
+                            const rK = "RAW_" + rawMat.n.toLowerCase(); 
+                            if (!inv[rK]) inv[rK] = { c: 'Raw', n: rawMat.n, in: 0, out: 0 }; 
+                            inv[rK].out += parseFloat(rawMat.q) || 0;
+                        }
+                    });
+                } else if (p.rn) { // Old format for backward compatibility
+                    const rK = "RAW_" + p.rn.toLowerCase(); 
+                    if (!inv[rK]) inv[rK] = { c: 'Raw', n: p.rn, in: 0, out: 0 }; 
+                    inv[rK].out += parseFloat(p.rq) || 0;
+                }
+                const fK = "FIN_" + p.n.toLowerCase(); 
+                if (!inv[fK]) inv[fK] = { c: 'Finished', n: p.n, in: 0, out: 0 }; 
+                inv[fK].in += parseFloat(p.q) || 0;
+            }
+        });
+        
+        user.sale.forEach(s => { 
+            if (s && s.n) {
+                const fK = "FIN_" + s.n.toLowerCase(); 
+                if (!inv[fK]) inv[fK] = { c: 'Finished', n: s.n, in: 0, out: 0 }; 
+                inv[fK].out += parseFloat(s.q) || 0;
+            }
+        });
+    } catch (e) {
+        console.error("Error calculating inventory:", e);
+    }
+    
+    return inv;
+}
 
-fProd.onsubmit = (e) => {
-    e.preventDefault();
-    // 1. Add the data to our user object
-    user.prod.push({ 
-        id: Date.now(), 
-        d: pDate.value, 
-        n: pName.value, 
-        q: +pQty.value, 
-        rn: pRawName.value, 
-        rq: +pRawQty.value 
-    });
-    
-    // 2. Clear the text inputs
-    e.target.reset(); 
-    
-    // 3. Reset the dropdown list back to "-- Select Raw Material --"
-    document.getElementById('pRawName').selectedIndex = 0; 
-    
-    // 4. Save to cloud and refresh UI
-    sync();
-};
+// Add new raw material row for production
+function addRawRow() {
+    try {
+        const rawMaterialsList = document.getElementById('rawMaterialsList');
+        if (!rawMaterialsList) return;
+        
+        const rowId = 'raw-' + Date.now();
+        const inv = getInventory();
+        
+        const rawOptions = Object.values(inv)
+            .filter(item => item.c === 'Raw')
+            .map(item => {
+                const stockLeft = (parseFloat(item.in) - parseFloat(item.out)).toFixed(2);
+                const isOutOfStock = parseFloat(stockLeft) <= 0;
+                return `<option value="${item.n}" ${isOutOfStock ? 'disabled' : ''}>${item.n} (Stock: ${stockLeft})</option>`;
+            })
+            .join('');
 
-fSale.onsubmit = (e) => {
-    e.preventDefault();
-    // 1. Add the sale data to our user object
-    user.sale.push({ 
-        id: Date.now(), 
-        d: sDate.value, 
-        n: sName.value, 
-        q: +sQty.value, 
-        a: +sAmt.value 
-    });
-    
-    // 2. Clear the text inputs
-    e.target.reset();
-    
-    // 3. Reset the dropdown list back to "-- Select Finished Product --"
-    document.getElementById('sName').selectedIndex = 0;
-    
-    // 4. Save to cloud and refresh UI
-    sync();
-};
+        const htmlContent = `
+            <div class="raw-row" id="${rowId}">
+                <div class="raw-row-container">
+                    <div class="raw-field">
+                        <label>Raw Material</label>
+                        <select class="raw-select" required>
+                            <option value="">-- Select --</option>
+                            ${rawOptions}
+                        </select>
+                    </div>
+                    <div class="raw-field">
+                        <label>Qty Used</label>
+                        <input type="number" class="raw-qty" step="0.01" min="0" placeholder="0.00" required>
+                    </div>
+                    <button type="button" class="btn btn-danger btn-small" onclick="removeRawRow('${rowId}')">Remove</button>
+                </div>
+            </div>
+        `;
+        
+        rawMaterialsList.insertAdjacentHTML('beforeend', htmlContent);
+    } catch (e) {
+        console.error("Error adding raw row:", e);
+        alert("Failed to add raw material row");
+    }
+}
+
+// Remove raw material row
+function removeRawRow(rowId) {
+    try {
+        const row = document.getElementById(rowId);
+        if (row) row.remove();
+    } catch (e) {
+        console.error("Error removing raw row:", e);
+    }
+}
+
+// Save production with multiple raw materials
+function saveProd() {
+    try {
+        if (!pDate || !pName || !pQty) {
+            alert("Form elements not loaded. Please refresh the page.");
+            return;
+        }
+
+        if (!pDate.value || !pName.value || !pQty.value) {
+            alert("Please fill in Date, Product Name, and Qty Produced");
+            return;
+        }
+
+        const rawRows = document.querySelectorAll('.raw-row');
+        if (rawRows.length === 0) {
+            alert("Please add at least one raw material");
+            return;
+        }
+
+        const rawMaterials = [];
+        let isValid = true;
+
+        rawRows.forEach(row => {
+            const rawSelect = row.querySelector('.raw-select');
+            const rawQty = row.querySelector('.raw-qty');
+
+            if (!rawSelect.value || !rawQty.value) {
+                isValid = false;
+                return;
+            }
+
+            rawMaterials.push({
+                n: rawSelect.value,
+                q: parseFloat(rawQty.value)
+            });
+        });
+
+        if (!isValid) {
+            alert("Please fill in all raw material fields");
+            return;
+        }
+
+        const extraCost = parseFloat(pExtraCost.value) || 0;
+
+        user.prod.push({
+            id: Date.now(),
+            d: pDate.value,
+            n: pName.value,
+            q: parseFloat(pQty.value),
+            rm: rawMaterials,
+            ec: extraCost
+        });
+
+        // Reset form
+        pDate.value = '';
+        pName.value = '';
+        pQty.value = '';
+        pExtraCost.value = '';
+        const rawMaterialsList = document.getElementById('rawMaterialsList');
+        if (rawMaterialsList) rawMaterialsList.innerHTML = '';
+
+        sync();
+    } catch (e) {
+        console.error("Error saving production:", e);
+        alert("Failed to save production. Please try again.");
+    }
+}
 
 function del(type, id) {
-    user[type] = user[type].filter(i => i.id !== id);
-    sync();
-}
-
-// Tab Switching logic
-document.querySelectorAll(".tab-btn").forEach(b => {
-    b.onclick = () => {
-        document.querySelectorAll(".tab-btn, section").forEach(e => e.classList.remove("active"));
-        b.classList.add("active");
-        document.getElementById(b.dataset.target).classList.add("active");
+    try {
+        user[type] = user[type].filter(i => i.id !== id);
+        sync();
+    } catch (e) {
+        console.error("Error deleting entry:", e);
+        alert("Failed to delete entry");
     }
-});
+}
 
 // Main UI Rendering function
-// Inhe render() function ke bahar, uske theek upar likhein
-const dCost = document.getElementById('dCost');
-const dSales = document.getElementById('dSales');
-const dProfit = document.getElementById('dProfit');
-const stockTable = document.getElementById('stockTable');
 function render() {
-    const fRaw = document.getElementById('fRaw');
-    const fProd = document.getElementById('fProd');
-    const fSale = document.getElementById('fSale');
-    const tRaw = document.getElementById('tRaw');
-    const tProd = document.getElementById('tProd');
-    const tSale = document.getElementById('tSale');
-    if (!tRaw || !user) return; // Safety check
-    // 1. Raw, Production, aur Sales tables ko update karein
-    tRaw.querySelector("tbody").innerHTML = user.raw.map(r => `<tr><td>${r.d}</td><td>${r.n}</td><td>${r.q}</td><td>₹${r.c}</td><td><button onclick="del('raw',${r.id})">Del</button></td></tr>`).join('');
-    tProd.querySelector("tbody").innerHTML = user.prod.map(p => `<tr><td>${p.d}</td><td>${p.n}</td><td>${p.q}</td><td>${p.rn}</td><td>${p.rq}</td><td><button onclick="del('prod',${p.id})">Del</button></td></tr>`).join('');
-    tSale.querySelector("tbody").innerHTML = user.sale.map(s => `<tr><td>${s.d}</td><td>${s.n}</td><td>${s.q}</td><td>₹${s.a}</td><td><button onclick="del('sale',${s.id})">Del</button></td></tr>`).join('');
+    try {
+        const dCost = document.getElementById('dCost');
+        const dSales = document.getElementById('dSales');
+        const dProfit = document.getElementById('dProfit');
+        const stockTable = document.getElementById('stockTable');
+        const tRaw = document.getElementById('tRaw');
+        const tProd = document.getElementById('tProd');
+        const tSale = document.getElementById('tSale');
+        
+        if (!tRaw || !user) return;
 
-    // 2. DASHBOARD: ALL ACTIVITY ENTRIES (Combining all arrays)
-    const allActivities = [
-        ...user.raw.map(r => ({ type: 'Raw', d: r.d, n: r.n, q: r.q, det: `Cost: ₹${r.c}` })),
-        ...user.prod.map(p => ({ type: 'Prod', d: p.d, n: p.n, q: p.q, det: `Used: ${p.rn} (${p.rq})` })),
-        ...user.sale.map(s => ({ type: 'Sale', d: s.d, n: s.n, q: s.q, det: `Amt: ₹${s.a}` }))
-    ];
+        // 1. Raw materials table with extra cost
+        if (tRaw) {
+            tRaw.querySelector("tbody").innerHTML = user.raw.map(r => {
+                const totalCost = (parseFloat(r.c) || 0) + (parseFloat(r.ec) || 0);
+                return `<tr>
+                    <td>${r.d || ''}</td>
+                    <td>${r.n || ''}</td>
+                    <td>${(parseFloat(r.q) || 0).toFixed(2)}</td>
+                    <td>₹${(parseFloat(r.c) || 0).toFixed(2)}</td>
+                    <td>₹${(parseFloat(r.ec) || 0).toFixed(2)}</td>
+                    <td>₹${totalCost.toFixed(2)}</td>
+                    <td><button onclick="del('raw',${r.id})">Del</button></td>
+                </tr>`;
+            }).join('');
+        }
 
-    // Newest entries top par dikhane ke liye sort karein
-    allActivities.sort((a, b) => new Date(b.d) - new Date(a.d));
+        // 2. Production table with multiple raw materials
+        if (tProd) {
+            tProd.querySelector("tbody").innerHTML = user.prod.map(p => {
+                let rawUsedText = '';
+                
+                if (p.rm && Array.isArray(p.rm)) {
+                    rawUsedText = p.rm.map(rm => `${rm.n} (${(parseFloat(rm.q) || 0).toFixed(2)})`).join(', ');
+                } else if (p.rn) {
+                    rawUsedText = `${p.rn} (${(parseFloat(p.rq) || 0).toFixed(2)})`;
+                }
+                
+                const extraCost = parseFloat(p.ec) || 0;
+                return `<tr>
+                    <td>${p.d || ''}</td>
+                    <td>${p.n || ''}</td>
+                    <td>${(parseFloat(p.q) || 0).toFixed(2)}</td>
+                    <td>${rawUsedText}</td>
+                    <td>₹${extraCost.toFixed(2)}</td>
+                    <td><button onclick="del('prod',${p.id})">Del</button></td>
+                </tr>`;
+            }).join('');
+        }
 
-    const activityTableBody = document.querySelector("#activityTable tbody");
-    if (activityTableBody) {
-        activityTableBody.innerHTML = allActivities.map(a => `
-            <tr>
-                <td><strong>${a.type}</strong></td>
-                <td>${a.d}</td>
-                <td>${a.n}</td>
-                <td>${a.q}</td>
-                <td>${a.det}</td>
-            </tr>
-        `).join('');
+        // 3. Sales table
+        if (tSale) {
+            tSale.querySelector("tbody").innerHTML = user.sale.map(s => `
+                <tr>
+                    <td>${s.d || ''}</td>
+                    <td>${s.n || ''}</td>
+                    <td>${(parseFloat(s.q) || 0).toFixed(2)}</td>
+                    <td>₹${(parseFloat(s.a) || 0).toFixed(2)}</td>
+                    <td><button onclick="del('sale',${s.id})">Del</button></td>
+                </tr>`
+            ).join('');
+        }
+
+        // 4. DASHBOARD: ALL ACTIVITY ENTRIES
+        const allActivities = [
+            ...user.raw.map(r => {
+                const totalCost = (parseFloat(r.c) || 0) + (parseFloat(r.ec) || 0);
+                return { type: 'Raw', d: r.d, n: r.n, q: parseFloat(r.q) || 0, det: `Cost: ₹${totalCost.toFixed(2)}` };
+            }),
+            ...user.prod.map(p => {
+                let rawUsedText = '';
+                if (p.rm && Array.isArray(p.rm)) {
+                    rawUsedText = p.rm.map(rm => `${rm.n} (${(parseFloat(rm.q) || 0).toFixed(2)})`).join(', ');
+                } else if (p.rn) {
+                    rawUsedText = `${p.rn} (${(parseFloat(p.rq) || 0).toFixed(2)})`;
+                }
+                return { type: 'Prod', d: p.d, n: p.n, q: parseFloat(p.q) || 0, det: `Used: ${rawUsedText}` };
+            }),
+            ...user.sale.map(s => ({ type: 'Sale', d: s.d, n: s.n, q: parseFloat(s.q) || 0, det: `Amt: ₹${(parseFloat(s.a) || 0).toFixed(2)}` }))
+        ];
+
+        allActivities.sort((a, b) => {
+            try {
+                return new Date(b.d) - new Date(a.d);
+            } catch (e) {
+                return 0;
+            }
+        });
+
+        const activityTableBody = document.querySelector("#activityTable tbody");
+        if (activityTableBody) {
+            activityTableBody.innerHTML = allActivities.map(a => `
+                <tr>
+                    <td><strong>${a.type}</strong></td>
+                    <td>${a.d || ''}</td>
+                    <td>${a.n || ''}</td>
+                    <td>${(parseFloat(a.q) || 0).toFixed(2)}</td>
+                    <td>${a.det}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 5. INVENTORY LOGIC (Stock Status)
+        const inv = getInventory();
+
+        if (stockTable) {
+            stockTable.querySelector("tbody").innerHTML = Object.values(inv).map(i => {
+                const remains = (parseFloat(i.in) - parseFloat(i.out)).toFixed(2);
+                const color = parseFloat(remains) < 0 ? '#dc2626' : '#16a34a';
+                return `
+                    <tr>
+                        <td>${i.c}</td>
+                        <td>${i.n}</td>
+                        <td>${(parseFloat(i.in) || 0).toFixed(2)}</td>
+                        <td>${(parseFloat(i.out) || 0).toFixed(2)}</td>
+                        <td style="font-weight:bold; color:${color}">${remains}</td>
+                    </tr>`;
+            }).join('');
+        }
+
+        updateDropdowns(inv);
+
+        // 6. TOP CARDS (Profit, Sales, Cost)
+        const cost = user.raw.reduce((a, b) => a + (parseFloat(b.c) || 0) + (parseFloat(b.ec) || 0), 0);
+        const prodExtraCost = user.prod.reduce((a, b) => a + (parseFloat(b.ec) || 0), 0);
+        const sale = user.sale.reduce((a, b) => a + (parseFloat(b.a) || 0), 0);
+        
+        if (dCost) dCost.textContent = "₹" + cost.toFixed(2);
+        if (dSales) dSales.textContent = "₹" + sale.toFixed(2);
+        
+        const totalProfit = sale - cost - prodExtraCost;
+        if (dProfit) {
+            dProfit.textContent = "₹" + totalProfit.toFixed(2);
+            dProfit.className = 'card-value ' + (totalProfit >= 0 ? 'profit' : 'loss');
+        }
+    } catch (e) {
+        console.error("Error rendering:", e);
     }
-
-    // 3. INVENTORY LOGIC (Stock Status)
-    const inv = {};
-    user.raw.forEach(r => { const k = "RAW_" + r.n.toLowerCase(); if (!inv[k]) inv[k] = { c: 'Raw', n: r.n, in: 0, out: 0 }; inv[k].in += r.q; });
-    user.prod.forEach(p => {
-        const rK = "RAW_" + p.rn.toLowerCase(); if (!inv[rK]) inv[rK] = { c: 'Raw', n: p.rn, in: 0, out: 0 }; inv[rK].out += p.rq;
-        const fK = "FIN_" + p.n.toLowerCase(); if (!inv[fK]) inv[fK] = { c: 'Finished', n: p.n, in: 0, out: 0 }; inv[fK].in += p.q;
-    });
-    user.sale.forEach(s => { const fK = "FIN_" + s.n.toLowerCase(); if (!inv[fK]) inv[fK] = { c: 'Finished', n: s.n, in: 0, out: 0 }; inv[fK].out += s.q; });
-
-    stockTable.querySelector("tbody").innerHTML = Object.values(inv).map(i => `<tr><td>${i.c}</td><td>${i.n}</td><td>${i.in}</td><td>${i.out}</td><td style="font-weight:bold; color:${(i.in - i.out) < 0 ? 'red' : 'green'}">${(i.in - i.out).toFixed(2)}</td></tr>`).join('');
-// Add this inside the render() function near the end
-updateDropdowns(inv);
-    // 4. TOP CARDS (Profit, Sales, Cost)
-    const cost = user.raw.reduce((a, b) => a + b.c, 0);
-    const sale = user.sale.reduce((a, b) => a + b.a, 0);
-    dCost.textContent = "₹" + cost;
-    dSales.textContent = "₹" + sale;
-    dProfit.textContent = "₹" + (sale - cost);
-    dProfit.className = 'card-value ' + (sale - cost >= 0 ? 'profit' : 'loss');
 }
 
-
-// Live Clock ko update karne ka function
+// Live Clock
 function updateClock() {
-    const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-    const timeStr = now.toLocaleDateString('en-IN', options);
-    const timeEl = document.getElementById('liveTime');
-    if (timeEl) timeEl.textContent = "🕒 " + timeStr;
+    try {
+        const now = new Date();
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        const timeStr = now.toLocaleDateString('en-IN', options);
+        const timeEl = document.getElementById('liveTime');
+        if (timeEl) timeEl.textContent = "🕒 " + timeStr;
+    } catch (e) {
+        console.error("Clock update error:", e);
+    }
 }
-setInterval(updateClock, 1000); // Har 1 second mein chalega
+setInterval(updateClock, 1000);
 
-// Final Start App Logic (Ise purane startApp se replace karein)
+// Start App Logic
 function startApp() {
-    if (!user.isSetupDone) {
-        // Agar pehli baar hai, toh setup dikhayein
-        document.getElementById('setupSection').style.display = 'block';
-        // Login button hide kar dein kyunki login ho chuka hai
-        document.querySelector('button[onclick="initiateLogin()"]').style.display = 'none';
-    } else {
-        // Agar setup ho chuka hai, toh dashboard dikhayein
-        document.getElementById('authSection').style.display = 'none';
-        document.getElementById('mainHeader').style.display = 'block';
-        document.getElementById('mainApp').style.display = 'block';
-
-        // Header mein Company aur Owner ka naam set karein
-        document.getElementById('headerTitle').innerHTML = `
-            ${user.company} <span class="owner-name">| Owner: ${user.owner}</span>
-        `;
-        updateClock();
-        render();
-    }
-}
-
-// Setup data ko cloud par save karne ke liye
-async function saveSetup() {
-    const comp = document.getElementById('setupCompany').value;
-    const own = document.getElementById('setupOwner').value;
-
-    if (!comp || !own) {
-        alert("Please enter both Company and Owner names.");
-        return;
-    }
-
-    user.company = comp;
-    user.owner = own;
-    user.isSetupDone = true;
-
-    showLoading(true);
-
-    // If fileId exists, we update (PATCH), if not, we create (POST)
-    if (!fileId) {
-        await createCloudFile();
-    } else {
-        await sync();
-    }
-
-    showLoading(false);
-    startApp();
-}
-function updateDropdowns(inventory) {
-    const rawSelect = document.getElementById('pRawName');
-    const saleSelect = document.getElementById('sName');
-    
-    // Clear existing options except the first one
-    rawSelect.innerHTML = '<option value="">-- Select Raw Material --</option>';
-    saleSelect.innerHTML = '<option value="">-- Select Finished Product --</option>';
-
-    Object.values(inventory).forEach(item => {
-        const stockLeft = (item.in - item.out).toFixed(2);
-        const option = document.createElement('option');
-        option.value = item.n;
-        option.textContent = `${item.n} (Stock: ${stockLeft})`;
-
-        // If stock is 0 or less, disable it and turn it red
-        if (stockLeft <= 0) {
-            option.disabled = true;
-            option.style.color = "red";
-            option.textContent += " - OUT OF STOCK";
-        }
-
-        if (item.c === 'Raw') {
-            rawSelect.appendChild(option);
+    try {
+        if (!user.isSetupDone) {
+            const setupSection = document.getElementById('setupSection');
+            if (setupSection) setupSection.style.display = 'block';
+            const loginBtn = document.querySelector('button[onclick="initiateLogin()"]');
+            if (loginBtn) loginBtn.style.display = 'none';
         } else {
-            saleSelect.appendChild(option);
+            const authSection = document.getElementById('authSection');
+            const mainHeader = document.getElementById('mainHeader');
+            const mainApp = document.getElementById('mainApp');
+            
+            if (authSection) authSection.style.display = 'none';
+            if (mainHeader) mainHeader.style.display = 'block';
+            if (mainApp) mainApp.style.display = 'block';
+
+            const headerTitle = document.getElementById('headerTitle');
+            if (headerTitle) {
+                headerTitle.innerHTML = `
+                    ${user.company || 'Company'} <span class="owner-name">| Owner: ${user.owner || 'Owner'}</span>
+                `;
+            }
+            updateClock();
+            render();
         }
-    });
+    } catch (e) {
+        console.error("Error starting app:", e);
+        alert("Failed to start app. Please refresh the page.");
+    }
+}
+
+// Setup data to cloud
+async function saveSetup() {
+    try {
+        const setupCompany = document.getElementById('setupCompany');
+        const setupOwner = document.getElementById('setupOwner');
+
+        if (!setupCompany || !setupOwner) {
+            alert("Setup form not found. Please refresh the page.");
+            return;
+        }
+
+        const comp = setupCompany.value.trim();
+        const own = setupOwner.value.trim();
+
+        if (!comp || !own) {
+            alert("Please enter both Company and Owner names.");
+            return;
+        }
+
+        user.company = comp;
+        user.owner = own;
+        user.isSetupDone = true;
+
+        showLoading(true);
+
+        if (!fileId) {
+            await createCloudFile();
+        } else {
+            await sync();
+        }
+
+        showLoading(false);
+        startApp();
+    } catch (e) {
+        console.error("Setup error:", e);
+        alert("Failed to save setup. Please try again.");
+        showLoading(false);
+    }
+}
+
+function updateDropdowns(inventory) {
+    try {
+        const saleSelect = document.getElementById('sName');
+        if (!saleSelect) return;
+
+        saleSelect.innerHTML = '<option value="">-- Select Finished Product --</option>';
+
+        Object.values(inventory).forEach(item => {
+            if (!item || !item.n) return;
+
+            if (item.c === 'Finished') {
+                const stockLeft = (parseFloat(item.in) - parseFloat(item.out)).toFixed(2);
+
+                const option = document.createElement('option');
+                option.value = item.n;
+                option.textContent = `${item.n} (Stock: ${stockLeft})`;
+
+                if (parseFloat(stockLeft) <= 0) {
+                    option.disabled = true;
+                    option.textContent += " - OUT OF STOCK";
+                }
+
+                saleSelect.appendChild(option);
+            }
+        });
+    } catch (e) {
+        console.error("Error updating dropdowns:", e);
+    }
 }
