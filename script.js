@@ -6,27 +6,33 @@ let tokenClient;
 let accessToken = null;
 let fileId = null;
 
-let user = {
-    raw: [],
-    prod: [],
-    sale: [],
-    company: '',
-    owner: '',
-    isSetupDone: false
+let user = { raw: [], prod: [], sale: [], company: '', owner: '', isSetupDone: false };
+
+// ================= INIT =================
+window.onload = () => {
+    const savedToken = localStorage.getItem('btcloudtoken');
+
+    if (savedToken) {
+        accessToken = savedToken;
+        loadFromCloud().catch(() => {
+            localStorage.removeItem('btcloudtoken');
+            document.getElementById('authSection').style.display = 'block';
+        });
+    } else {
+        document.getElementById('authSection').style.display = 'block';
+    }
+
+    setInterval(updateClock, 1000);
 };
 
-// =============== UTIL =================
-function escapeHTML(str) {
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
+// ================= UTIL =================
 function showLoading(state) {
     document.getElementById('loading').style.display = state ? 'flex' : 'none';
+}
+
+function updateClock() {
+    const el = document.getElementById('liveTime');
+    if (el) el.textContent = new Date().toLocaleString('en-IN');
 }
 
 function logout() {
@@ -35,22 +41,7 @@ function logout() {
     location.reload();
 }
 
-// =============== INIT =================
-window.onload = () => {
-    const savedToken = localStorage.getItem('btcloudtoken');
-    if (savedToken) {
-        accessToken = savedToken;
-        loadFromCloud().catch(() => logout());
-    } else {
-        document.getElementById('authSection').style.display = 'block';
-    }
-
-    setInterval(updateClock, 1000);
-
-    document.querySelector('#mainHeader button').onclick = logout;
-};
-
-// =============== DRIVE =================
+// ================= DRIVE =================
 async function loadFromCloud() {
     showLoading(true);
     try {
@@ -59,22 +50,23 @@ async function loadFromCloud() {
             { headers: { Authorization: `Bearer ${accessToken}` } }
         );
 
-        if (res.status === 401) return logout();
-
         const list = await res.json();
 
-        if (list.files?.length) {
+        if (list.files && list.files.length > 0) {
             fileId = list.files[0].id;
+
             const content = await fetch(
                 `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
                 { headers: { Authorization: `Bearer ${accessToken}` } }
             );
-            user = await content.json();
+
+            const cloudData = await content.json();
+            if (cloudData) user = cloudData;
         }
 
         startApp();
     } catch (e) {
-        console.error("Cloud load error", e);
+        console.error("Cloud error:", e);
     } finally {
         showLoading(false);
     }
@@ -97,47 +89,81 @@ async function sync() {
     }
 }
 
-// =============== INVENTORY ENGINE =================
-function calculateInventory() {
-    const inv = {};
-
-    user.raw.forEach(r => {
-        if (!inv[r.n]) inv[r.n] = { type: 'Raw', in: 0, out: 0, cost: 0 };
-        inv[r.n].in += r.q;
-        inv[r.n].cost += r.c + r.ec;
+// ================= AUTH =================
+function initiateLogin() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (res) => {
+            accessToken = res.access_token;
+            localStorage.setItem('btcloudtoken', accessToken);
+            loadFromCloud();
+        }
     });
-
-    user.prod.forEach(p => {
-        if (inv[p.mainRaw.rn]) inv[p.mainRaw.rn].out += p.mainRaw.rq;
-        p.extraRaws.forEach(er => {
-            if (inv[er.rn]) inv[er.rn].out += er.rq;
-        });
-
-        if (!inv[p.n]) inv[p.n] = { type: 'Finished', in: 0, out: 0 };
-        inv[p.n].in += p.q;
-    });
-
-    user.sale.forEach(s => {
-        if (inv[s.n]) inv[s.n].out += s.q;
-    });
-
-    return inv;
+    tokenClient.requestAccessToken();
 }
 
-function hasEnoughStock(item, qty) {
-    const inv = calculateInventory();
-    if (!inv[item]) return false;
-    return (inv[item].in - inv[item].out) >= qty;
+// ================= SETUP =================
+async function saveSetup() {
+    const company = document.getElementById('setupCompany').value.trim();
+    const owner = document.getElementById('setupOwner').value.trim();
+
+    if (!company || !owner) {
+        alert("Please fill company and owner name.");
+        return;
+    }
+
+    user.company = company;
+    user.owner = owner;
+    user.isSetupDone = true;
+
+    await createCloudFile();
+    startApp();
 }
 
-// =============== FORMS =================
-document.getElementById('fRaw').onsubmit = e => {
+async function createCloudFile() {
+    const metadata = { name: 'trackerdata.json', parents: ['appDataFolder'] };
+
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', new Blob([JSON.stringify(user)], { type: 'application/json' }));
+
+    const res = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: form
+        }
+    );
+
+    const data = await res.json();
+    fileId = data.id;
+}
+
+// ================= APP START =================
+function startApp() {
+    document.getElementById('authSection').style.display = 'none';
+
+    if (!user.isSetupDone) {
+        document.getElementById('setupSection').style.display = 'block';
+    } else {
+        document.getElementById('mainHeader').style.display = 'block';
+        document.getElementById('mainApp').style.display = 'block';
+        document.getElementById('headerTitle').innerHTML =
+            `${user.company} <span class="owner-name">Owner: ${user.owner}</span>`;
+        render();
+    }
+}
+
+// ================= FORMS =================
+document.getElementById('fRaw').onsubmit = (e) => {
     e.preventDefault();
 
     user.raw.push({
         id: Date.now(),
         d: riDate.value,
-        n: riName.value.trim(),
+        n: riName.value,
         q: parseFloat(riQty.value),
         c: parseFloat(riCost.value),
         ec: parseFloat(riExtraCost.value) || 0
@@ -148,62 +174,35 @@ document.getElementById('fRaw').onsubmit = e => {
     sync();
 };
 
-document.getElementById('fProd').onsubmit = e => {
+document.getElementById('fProd').onsubmit = (e) => {
     e.preventDefault();
-
-    const mainRawName = pRawName.value;
-    const mainQty = parseFloat(pRawQty.value);
-
-    if (!hasEnoughStock(mainRawName, mainQty)) {
-        alert("Not enough raw material in stock!");
-        return;
-    }
-
-    const extraRaws = [];
-    document.querySelectorAll('.extra-raw-row').forEach(row => {
-        const sel = row.querySelector('.extra-raw-select');
-        const qty = row.querySelector('.extra-raw-qty');
-        if (sel.value && qty.value) {
-            if (!hasEnoughStock(sel.value, parseFloat(qty.value))) {
-                alert("Not enough stock for extra raw!");
-                return;
-            }
-            extraRaws.push({ rn: sel.value, rq: parseFloat(qty.value) });
-        }
-    });
 
     user.prod.push({
         id: Date.now(),
         d: pDate.value,
-        n: pName.value.trim(),
+        n: pName.value,
         q: parseFloat(pQty.value),
-        mainRaw: { rn: mainRawName, rq: mainQty },
-        extraRaws,
+        mainRaw: {
+            rn: pRawName.value,
+            rq: parseFloat(pRawQty.value)
+        },
+        extraRaws: [],
         ec: parseFloat(pExtraCost.value) || 0
     });
 
     e.target.reset();
-    document.getElementById('additionalRaws').innerHTML = '';
     render();
     sync();
 };
 
-document.getElementById('fSale').onsubmit = e => {
+document.getElementById('fSale').onsubmit = (e) => {
     e.preventDefault();
-
-    const product = sName.value;
-    const qty = parseFloat(sQty.value);
-
-    if (!hasEnoughStock(product, qty)) {
-        alert("Not enough finished goods in stock!");
-        return;
-    }
 
     user.sale.push({
         id: Date.now(),
         d: sDate.value,
-        n: product,
-        q: qty,
+        n: sName.value,
+        q: parseFloat(sQty.value),
         a: parseFloat(sAmt.value)
     });
 
@@ -212,84 +211,53 @@ document.getElementById('fSale').onsubmit = e => {
     sync();
 };
 
-// =============== RENDER =================
+// ================= RENDER =================
 function render() {
-    const inv = calculateInventory();
+    const tRaw = document.querySelector('#tRaw tbody');
+    const tProd = document.querySelector('#tProd tbody');
+    const tSale = document.querySelector('#tSale tbody');
 
-    // Raw table
-    tRaw.querySelector('tbody').innerHTML = user.raw.map(r => `
-        <tr>
-            <td>${escapeHTML(r.d)}</td>
-            <td>${escapeHTML(r.n)}</td>
+    tRaw.innerHTML = user.raw.map(r =>
+        `<tr>
+            <td>${r.d}</td>
+            <td>${r.n}</td>
             <td>${r.q}</td>
             <td>${r.c}</td>
             <td>${r.ec}</td>
             <td><button onclick="del('raw',${r.id})">Del</button></td>
-        </tr>
-    `).join('');
+        </tr>`
+    ).join('');
 
-    // Production
-    tProd.querySelector('tbody').innerHTML = user.prod.map(p => `
-        <tr>
-            <td>${escapeHTML(p.d)}</td>
-            <td>${escapeHTML(p.n)}</td>
+    tProd.innerHTML = user.prod.map(p =>
+        `<tr>
+            <td>${p.d}</td>
+            <td>${p.n}</td>
             <td>${p.q}</td>
-            <td>${escapeHTML(p.mainRaw.rn)}</td>
-            <td>${p.extraRaws.length}</td>
+            <td>${p.mainRaw?.rn || ''}</td>
             <td>${p.ec}</td>
             <td><button onclick="del('prod',${p.id})">Del</button></td>
-        </tr>
-    `).join('');
+        </tr>`
+    ).join('');
 
-    // Sales
-    tSale.querySelector('tbody').innerHTML = user.sale.map(s => `
-        <tr>
-            <td>${escapeHTML(s.d)}</td>
-            <td>${escapeHTML(s.n)}</td>
+    tSale.innerHTML = user.sale.map(s =>
+        `<tr>
+            <td>${s.d}</td>
+            <td>${s.n}</td>
             <td>${s.q}</td>
             <td>${s.a}</td>
             <td><button onclick="del('sale',${s.id})">Del</button></td>
-        </tr>
-    `).join('');
+        </tr>`
+    ).join('');
 
-    // Stock table
-    stockTable.querySelector('tbody').innerHTML =
-        Object.entries(inv).map(([name, data]) => `
-        <tr>
-            <td>${data.type}</td>
-            <td>${escapeHTML(name)}</td>
-            <td>${data.in}</td>
-            <td>${data.out}</td>
-            <td>${(data.in - data.out).toFixed(2)}</td>
-        </tr>
-    `).join('');
-
-    // Activity Table
-    const activities = [
-        ...user.raw.map(r => ({ type: 'Raw', ...r })),
-        ...user.prod.map(p => ({ type: 'Production', ...p })),
-        ...user.sale.map(s => ({ type: 'Sale', ...s }))
-    ].sort((a, b) => new Date(b.d) - new Date(a.d));
-
-    activityTable.querySelector('tbody').innerHTML =
-        activities.map(a => `
-        <tr>
-            <td>${a.type}</td>
-            <td>${escapeHTML(a.d)}</td>
-            <td>${escapeHTML(a.n)}</td>
-            <td>${a.q}</td>
-            <td>-</td>
-        </tr>
-    `).join('');
-
-    // Profit
     const totalSales = user.sale.reduce((a, b) => a + b.a, 0);
-    const totalCost = user.raw.reduce((a, b) => a + b.c + b.ec, 0)
-        + user.prod.reduce((a, b) => a + b.ec, 0);
+    const totalCost =
+        user.raw.reduce((a, b) => a + b.c + b.ec, 0) +
+        user.prod.reduce((a, b) => a + b.ec, 0);
 
-    dSales.textContent = `$${totalSales.toFixed(2)}`;
-    dCost.textContent = `$${totalCost.toFixed(2)}`;
-    dProfit.textContent = `$${(totalSales - totalCost).toFixed(2)}`;
+    document.getElementById('dSales').textContent = `$${totalSales.toFixed(2)}`;
+    document.getElementById('dCost').textContent = `$${totalCost.toFixed(2)}`;
+    document.getElementById('dProfit').textContent =
+        `$${(totalSales - totalCost).toFixed(2)}`;
 }
 
 function del(type, id) {
@@ -298,30 +266,14 @@ function del(type, id) {
     sync();
 }
 
-// =============== AUTH =================
-function initiateLogin() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: res => {
-            accessToken = res.access_token;
-            localStorage.setItem('btcloudtoken', accessToken);
-            loadFromCloud();
-        }
-    });
-    tokenClient.requestAccessToken();
-}
+// ================= TABS =================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.tab-btn, section')
+            .forEach(el => el.classList.remove('active'));
 
-// =============== SETUP =================
-function startApp() {
-    authSection.style.display = 'none';
-    mainHeader.style.display = 'block';
-    mainApp.style.display = 'block';
-    headerTitle.innerHTML = `${escapeHTML(user.company)} <span class="owner-name">Owner: ${escapeHTML(user.owner)}</span>`;
-    render();
-}
-
-function updateClock() {
-    const el = document.getElementById('liveTime');
-    if (el) el.textContent = new Date().toLocaleString('en-IN');
-}
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.target)
+            .classList.add('active');
+    };
+});
