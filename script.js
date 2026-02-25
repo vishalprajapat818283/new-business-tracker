@@ -30,6 +30,84 @@ let riDate, riName, riQty, riCost, riExtraCost;
 let pDate, pName, pQty, pExtraCost;
 let sDate, sName, sQty, sAmt;
 
+// --- UTILITY FUNCTIONS ---
+
+// Escape HTML for XSS prevention
+function escapeHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Toast notification system
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.setAttribute('role', 'alert');
+    toast.textContent = message;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Search/filter table rows
+function filterTable(inputId, tableId) {
+    const query = (document.getElementById(inputId) || {}).value || '';
+    const lowerQuery = query.toLowerCase();
+    const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+    rows.forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(lowerQuery) ? '' : 'none';
+    });
+}
+
+// Export table data as CSV
+function exportCSV(type) {
+    let headers, rows, filename;
+    if (type === 'raw') {
+        headers = ['Date','Material','Qty','Cost','Extra Cost','Total'];
+        rows = user.raw.map(r => [r.d, r.n, r.q, r.c, r.ec || 0, (parseFloat(r.c)||0)+(parseFloat(r.ec)||0)]);
+        filename = 'raw_materials.csv';
+    } else if (type === 'prod') {
+        headers = ['Date','Product','Category','Size','Qty','Raw Materials','Extra Cost'];
+        rows = user.prod.map(p => {
+            const rm = p.rm ? p.rm.map(r => `${r.n}(${r.q})`).join(';') : (p.rn || '');
+            return [p.d, p.n, p.cat, p.size, p.q, rm, p.ec || 0];
+        });
+        filename = 'production.csv';
+    } else if (type === 'sale') {
+        headers = ['Date','Product','Qty','Amount'];
+        rows = user.sale.map(s => [s.d, s.n, s.q, s.a]);
+        filename = 'sales.csv';
+    } else if (type === 'stock') {
+        const inv = getInventory();
+        headers = ['Category','Item','Total In','Total Out','Remaining'];
+        rows = Object.values(inv).map(i => [i.c, i.n, i.in, i.out, (i.in - i.out).toFixed(2)]);
+        filename = 'stock.csv';
+    } else if (type === 'activity') {
+        headers = ['Type','Date','Item','Qty','Details'];
+        const acts = [
+            ...user.raw.map(r => ({ type: 'Raw', d: r.d, n: r.n, q: r.q, det: `Cost:${(parseFloat(r.c)||0)+(parseFloat(r.ec)||0)}` })),
+            ...user.prod.map(p => ({ type: 'Prod', d: p.d, n: p.n, q: p.q, det: p.rm ? p.rm.map(r=>`${r.n}(${r.q})`).join(';') : '' })),
+            ...user.sale.map(s => ({ type: 'Sale', d: s.d, n: s.n, q: s.q, det: `Amt:${s.a}` }))
+        ];
+        rows = acts.map(a => [a.type, a.d, a.n, a.q, a.det]);
+        filename = 'activity.csv';
+    } else {
+        return;
+    }
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 // Initialize DOM references after DOM loads
 function initDOMReferences() {
     fRaw = document.getElementById('fRaw');
@@ -52,6 +130,69 @@ function initDOMReferences() {
     sQty = document.getElementById('sQty');
     sAmt = document.getElementById('sAmt');
 
+    // Wire up static buttons via addEventListener (no inline onclick)
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) loginBtn.addEventListener('click', initiateLogin);
+
+    const createAccountBtn = document.getElementById('createAccountBtn');
+    if (createAccountBtn) createAccountBtn.addEventListener('click', saveSetup);
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+
+    if (pCategory) pCategory.addEventListener('change', updateSizeOptions);
+
+    const addRawBtn = document.getElementById('addRawBtn');
+    if (addRawBtn) addRawBtn.addEventListener('click', addRawRow);
+
+    const addAnotherRawBtn = document.getElementById('addAnotherRawBtn');
+    if (addAnotherRawBtn) addAnotherRawBtn.addEventListener('click', addRawRow);
+
+    const saveProdBtn = document.getElementById('saveProdBtn');
+    if (saveProdBtn) saveProdBtn.addEventListener('click', saveProd);
+
+    // Search inputs
+    const searchRaw = document.getElementById('searchRaw');
+    if (searchRaw) searchRaw.addEventListener('input', () => filterTable('searchRaw', 'tRaw'));
+
+    const searchProd = document.getElementById('searchProd');
+    if (searchProd) searchProd.addEventListener('input', () => filterTable('searchProd', 'tProd'));
+
+    const searchSale = document.getElementById('searchSale');
+    if (searchSale) searchSale.addEventListener('input', () => filterTable('searchSale', 'tSale'));
+
+    const searchStock = document.getElementById('searchStock');
+    if (searchStock) searchStock.addEventListener('input', () => filterTable('searchStock', 'stockTable'));
+
+    const searchActivity = document.getElementById('searchActivity');
+    if (searchActivity) searchActivity.addEventListener('input', () => filterTable('searchActivity', 'activityTable'));
+
+    // Export buttons
+    const exportRawBtn = document.getElementById('exportRawBtn');
+    if (exportRawBtn) exportRawBtn.addEventListener('click', () => exportCSV('raw'));
+
+    const exportProdBtn = document.getElementById('exportProdBtn');
+    if (exportProdBtn) exportProdBtn.addEventListener('click', () => exportCSV('prod'));
+
+    const exportSaleBtn = document.getElementById('exportSaleBtn');
+    if (exportSaleBtn) exportSaleBtn.addEventListener('click', () => exportCSV('sale'));
+
+    const exportStockBtn = document.getElementById('exportStockBtn');
+    if (exportStockBtn) exportStockBtn.addEventListener('click', () => exportCSV('stock'));
+
+    const exportActivityBtn = document.getElementById('exportActivityBtn');
+    if (exportActivityBtn) exportActivityBtn.addEventListener('click', () => exportCSV('activity'));
+
+    // Event delegation for dynamically created del and remove buttons
+    document.addEventListener('click', (e) => {
+        if (e.target.matches('.del-btn')) {
+            del(e.target.dataset.type, parseInt(e.target.dataset.id));
+        }
+        if (e.target.matches('.remove-raw-btn')) {
+            removeRawRow(e.target.dataset.row);
+        }
+    });
+
     // Attach event listeners
     // RAW FORM
     if (fRaw) {
@@ -68,6 +209,7 @@ function initDOMReferences() {
             });
 
             fRaw.reset();
+            showToast('Raw material saved successfully! ✅');
             sync();
         };
     }
@@ -78,7 +220,7 @@ function initDOMReferences() {
             e.preventDefault();
 
             if (!sName.value) {
-                alert("Select product");
+                showToast('Please select a product', 'error');
                 return;
             }
 
@@ -95,6 +237,7 @@ function initDOMReferences() {
             });
 
             fSale.reset();
+            showToast('Sale recorded successfully! ✅');
             sync();
         };
     }
@@ -102,8 +245,13 @@ function initDOMReferences() {
     // Tab switching
     document.querySelectorAll(".tab-btn").forEach(b => {
         b.onclick = () => {
-            document.querySelectorAll(".tab-btn, section").forEach(e => e.classList.remove("active"));
+            document.querySelectorAll(".tab-btn").forEach(t => {
+                t.classList.remove("active");
+                t.setAttribute('aria-selected', 'false');
+            });
+            document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
             b.classList.add("active");
+            b.setAttribute('aria-selected', 'true');
             const targetSection = document.getElementById(b.dataset.target);
             if (targetSection) targetSection.classList.add("active");
 
@@ -198,10 +346,8 @@ async function loadFromCloud() {
 
             if (cloudData && (cloudData.isSetupDone || cloudData.raw)) {
                 user = cloudData;
-                console.log("Data recovered from Cloud.");
             }
         } else {
-            console.log("New user: No existing file found.");
             fileId = null;
         }
 
@@ -240,7 +386,6 @@ async function createCloudFile() {
 
         const data = await res.json();
         fileId = data.id;
-        console.log("Cloud file created successfully.");
     } catch (e) {
         console.error("Error creating cloud file:", e);
         alert("Failed to create cloud file. Please try again.");
@@ -251,7 +396,6 @@ async function sync() {
     render();
 
     if (!accessToken || !fileId || !user.isSetupDone) {
-        console.log("Sync skipped: Data not fully loaded or setup incomplete.");
         return;
     }
 
@@ -264,7 +408,6 @@ async function sync() {
 
         if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
 
-        console.log("Cloud Synced Successfully.");
     } catch (e) {
         console.warn("Sync failed:", e);
     }
@@ -372,12 +515,13 @@ function addRawRow() {
             .map(item => {
                 const stockLeft = (parseFloat(item.in) - parseFloat(item.out)).toFixed(2);
                 const isOutOfStock = parseFloat(stockLeft) <= 0;
-                return `<option value="${item.n}" ${isOutOfStock ? 'disabled' : ''}>${item.n} (Stock: ${stockLeft})</option>`;
+                const safeName = escapeHtml(item.n);
+                return `<option value="${safeName}" ${isOutOfStock ? 'disabled' : ''}>${safeName} (Stock: ${stockLeft})</option>`;
             })
             .join('');
 
         const htmlContent = `
-            <div class="raw-row" id="${rowId}">
+            <div class="raw-row" id="${escapeHtml(rowId)}">
                 <div class="raw-row-container">
                     <div class="raw-field">
                         <label>Raw Material</label>
@@ -390,7 +534,7 @@ function addRawRow() {
                         <label>Qty Used</label>
                         <input type="number" class="raw-qty" step="0.01" min="0" placeholder="0.00" required>
                     </div>
-                    <button type="button" class="btn btn-danger btn-small" onclick="removeRawRow('${rowId}')">Remove</button>
+                    <button type="button" class="btn btn-danger btn-small remove-raw-btn" data-row="${escapeHtml(rowId)}" aria-label="Remove raw material row">Remove</button>
                 </div>
             </div>
         `;
@@ -398,7 +542,7 @@ function addRawRow() {
         rawMaterialsList.insertAdjacentHTML('beforeend', htmlContent);
     } catch (e) {
         console.error("Error adding raw row:", e);
-        alert("Failed to add raw material row");
+        showToast('Failed to add raw material row', 'error');
     }
 }
 
@@ -415,13 +559,13 @@ function removeRawRow(rowId) {
 // Save production with multiple raw materials
 function saveProd() {
     if (!pDate.value || !pName.value || !pQty.value || !pCategory.value || !pSize.value) {
-        alert("Please fill all production details");
+        showToast('Please fill all production details', 'error');
         return;
     }
 
     const rawRows = document.querySelectorAll('.raw-row');
     if (rawRows.length === 0) {
-        alert("Please add at least one raw material");
+        showToast('Please add at least one raw material', 'error');
         return;
     }
 
@@ -458,6 +602,7 @@ function saveProd() {
     pSize.innerHTML = '<option value="">-- Select Size --</option>';
     document.getElementById("rawMaterialsList").innerHTML = "";
 
+    showToast('Production saved successfully! ✅');
     sync();
 }
 
@@ -479,13 +624,13 @@ function render() {
             tRaw.querySelector("tbody").innerHTML = user.raw.map(r => {
                 const totalCost = (parseFloat(r.c) || 0) + (parseFloat(r.ec) || 0);
                 return `<tr>
-                    <td>${r.d || ''}</td>
-                    <td>${r.n || ''}</td>
+                    <td>${escapeHtml(r.d)}</td>
+                    <td>${escapeHtml(r.n)}</td>
                     <td>${(parseFloat(r.q) || 0).toFixed(2)}</td>
                     <td>₹${(parseFloat(r.c) || 0).toFixed(2)}</td>
                     <td>₹${(parseFloat(r.ec) || 0).toFixed(2)}</td>
                     <td>₹${totalCost.toFixed(2)}</td>
-                    <td><button onclick="del('raw',${r.id})">Del</button></td>
+                    <td><button class="del-btn btn btn-danger btn-small" data-type="raw" data-id="${r.id}" aria-label="Delete raw material entry">Del</button></td>
                 </tr>`;
             }).join('');
         }
@@ -496,19 +641,19 @@ function render() {
                 let rawUsedText = '';
 
                 if (p.rm && Array.isArray(p.rm)) {
-                    rawUsedText = p.rm.map(rm => `${rm.n} (${(parseFloat(rm.q) || 0).toFixed(2)})`).join(', ');
+                    rawUsedText = p.rm.map(rm => `${escapeHtml(rm.n)} (${(parseFloat(rm.q) || 0).toFixed(2)})`).join(', ');
                 } else if (p.rn) {
-                    rawUsedText = `${p.rn} (${(parseFloat(p.rq) || 0).toFixed(2)})`;
+                    rawUsedText = `${escapeHtml(p.rn)} (${(parseFloat(p.rq) || 0).toFixed(2)})`;
                 }
 
                 const extraCost = parseFloat(p.ec) || 0;
                 return `<tr>
-                    <td>${p.d || ''}</td>
-                    <td>${p.n || ''}</td>
+                    <td>${escapeHtml(p.d)}</td>
+                    <td>${escapeHtml(p.n)}</td>
                     <td>${(parseFloat(p.q) || 0).toFixed(2)}</td>
                     <td>${rawUsedText}</td>
                     <td>₹${extraCost.toFixed(2)}</td>
-                    <td><button onclick="del('prod',${p.id})">Del</button></td>
+                    <td><button class="del-btn btn btn-danger btn-small" data-type="prod" data-id="${p.id}" aria-label="Delete production entry">Del</button></td>
                 </tr>`;
             }).join('');
         }
@@ -517,11 +662,11 @@ function render() {
         if (tSale) {
             tSale.querySelector("tbody").innerHTML = user.sale.map(s => `
                 <tr>
-                    <td>${s.d || ''}</td>
-                    <td>${s.n || ''}</td>
+                    <td>${escapeHtml(s.d)}</td>
+                    <td>${escapeHtml(s.n)}</td>
                     <td>${(parseFloat(s.q) || 0).toFixed(2)}</td>
                     <td>₹${(parseFloat(s.a) || 0).toFixed(2)}</td>
-                    <td><button onclick="del('sale',${s.id})">Del</button></td>
+                    <td><button class="del-btn btn btn-danger btn-small" data-type="sale" data-id="${s.id}" aria-label="Delete sale entry">Del</button></td>
                 </tr>`
             ).join('');
         }
@@ -556,11 +701,11 @@ function render() {
         if (activityTableBody) {
             activityTableBody.innerHTML = allActivities.map(a => `
                 <tr>
-                    <td><strong>${a.type}</strong></td>
-                    <td>${a.d || ''}</td>
-                    <td>${a.n || ''}</td>
+                    <td><strong>${escapeHtml(a.type)}</strong></td>
+                    <td>${escapeHtml(a.d)}</td>
+                    <td>${escapeHtml(a.n)}</td>
                     <td>${(parseFloat(a.q) || 0).toFixed(2)}</td>
-                    <td>${a.det}</td>
+                    <td>${escapeHtml(a.det)}</td>
                 </tr>
             `).join('');
         }
@@ -574,8 +719,8 @@ function render() {
                 const color = parseFloat(remains) < 0 ? '#dc2626' : '#16a34a';
                 return `
                     <tr>
-                        <td>${i.c}</td>
-                        <td>${i.n}</td>
+                        <td>${escapeHtml(i.c)}</td>
+                        <td>${escapeHtml(i.n)}</td>
                         <td>${(parseFloat(i.in) || 0).toFixed(2)}</td>
                         <td>${(parseFloat(i.out) || 0).toFixed(2)}</td>
                         <td style="font-weight:bold; color:${color}">${remains}</td>
@@ -623,7 +768,7 @@ function startApp() {
         if (!user.isSetupDone) {
             const setupSection = document.getElementById('setupSection');
             if (setupSection) setupSection.style.display = 'block';
-            const loginBtn = document.querySelector('button[onclick="initiateLogin()"]');
+            const loginBtn = document.getElementById('loginBtn');
             if (loginBtn) loginBtn.style.display = 'none';
         } else {
             const authSection = document.getElementById('authSection');
@@ -637,7 +782,7 @@ function startApp() {
             const headerTitle = document.getElementById('headerTitle');
             if (headerTitle) {
                 headerTitle.innerHTML = `
-                    ${user.company || 'Company'} <span class="owner-name">| Owner: ${user.owner || 'Owner'}</span>
+                    ${escapeHtml(user.company || 'Company')} <span class="owner-name">| Owner: ${escapeHtml(user.owner || 'Owner')}</span>
                 `;
             }
             updateClock();
@@ -664,7 +809,7 @@ async function saveSetup() {
         const own = setupOwner.value.trim();
 
         if (!comp || !own) {
-            alert("Please enter both Company and Owner names.");
+            showToast('Please enter both Company and Owner names.', 'error');
             return;
         }
 
@@ -731,6 +876,7 @@ function del(type, id) {
         user.sale = user.sale.filter(item => item.id !== id);
     }
 
+    showToast('Entry deleted', 'warning');
     sync(); // re-render + cloud update
 }
 
