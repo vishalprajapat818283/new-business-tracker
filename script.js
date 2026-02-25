@@ -63,6 +63,29 @@ function filterTable(inputId, tableId) {
     });
 }
 
+// Advanced filter for sales table (name, category, size)
+function filterSaleAdvanced() {
+    const nameQuery = ((document.getElementById('searchSale') || {}).value || '').toLowerCase();
+    const catQuery = ((document.getElementById('searchSaleCategory') || {}).value || '').toLowerCase();
+    const sizeQuery = ((document.getElementById('searchSaleSize') || {}).value || '').toLowerCase();
+    const rows = document.querySelectorAll('#tSale tbody tr');
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const name = (cells[1] ? cells[1].textContent : '').toLowerCase();
+        const cat = (cells[2] ? cells[2].textContent : '').toLowerCase();
+        const size = (cells[3] ? cells[3].textContent : '').toLowerCase();
+        const show = name.includes(nameQuery) && cat.includes(catQuery) && size.includes(sizeQuery);
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// Apply theme
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const btn = document.getElementById('themeToggleBtn');
+    if (btn) btn.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
+}
+
 // Export table data as CSV
 function exportCSV(type) {
     let headers, rows, filename;
@@ -78,8 +101,8 @@ function exportCSV(type) {
         });
         filename = 'production.csv';
     } else if (type === 'sale') {
-        headers = ['Date','Product','Qty','Amount'];
-        rows = user.sale.map(s => [s.d, s.n, s.q, s.a]);
+        headers = ['Date','Product','Category','Size','Qty','Amount'];
+        rows = user.sale.map(s => [s.d, s.n, s.cat || '', s.size || '', s.q, s.a]);
         filename = 'sales.csv';
     } else if (type === 'stock') {
         const inv = getInventory();
@@ -159,7 +182,13 @@ function initDOMReferences() {
     if (searchProd) searchProd.addEventListener('input', () => filterTable('searchProd', 'tProd'));
 
     const searchSale = document.getElementById('searchSale');
-    if (searchSale) searchSale.addEventListener('input', () => filterTable('searchSale', 'tSale'));
+    if (searchSale) searchSale.addEventListener('input', filterSaleAdvanced);
+
+    const searchSaleCategory = document.getElementById('searchSaleCategory');
+    if (searchSaleCategory) searchSaleCategory.addEventListener('input', filterSaleAdvanced);
+
+    const searchSaleSize = document.getElementById('searchSaleSize');
+    if (searchSaleSize) searchSaleSize.addEventListener('input', filterSaleAdvanced);
 
     const searchStock = document.getElementById('searchStock');
     if (searchStock) searchStock.addEventListener('input', () => filterTable('searchStock', 'stockTable'));
@@ -182,6 +211,20 @@ function initDOMReferences() {
 
     const exportActivityBtn = document.getElementById('exportActivityBtn');
     if (exportActivityBtn) exportActivityBtn.addEventListener('click', () => exportCSV('activity'));
+
+    // Theme toggle
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(newTheme);
+            localStorage.setItem('theme', newTheme);
+        });
+    }
+    // Apply saved theme on load
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) applyTheme(savedTheme);
 
     // Event delegation for dynamically created del and remove buttons
     document.addEventListener('click', (e) => {
@@ -664,6 +707,8 @@ function render() {
                 <tr>
                     <td>${escapeHtml(s.d)}</td>
                     <td>${escapeHtml(s.n)}</td>
+                    <td>${escapeHtml(s.cat || '')}</td>
+                    <td>${escapeHtml(s.size || '')}</td>
                     <td>${(parseFloat(s.q) || 0).toFixed(2)}</td>
                     <td>₹${(parseFloat(s.a) || 0).toFixed(2)}</td>
                     <td><button class="del-btn btn btn-danger btn-small" data-type="sale" data-id="${s.id}" aria-label="Delete sale entry">Del</button></td>
@@ -684,9 +729,13 @@ function render() {
                 } else if (p.rn) {
                     rawUsedText = `${p.rn} (${(parseFloat(p.rq) || 0).toFixed(2)})`;
                 }
-                return { type: 'Prod', d: p.d, n: p.n, q: parseFloat(p.q) || 0, det: `Used: ${rawUsedText}` };
+                const catSize = (p.cat && p.size) ? ` (${p.cat}/${p.size})` : '';
+                return { type: 'Prod', d: p.d, n: p.n + catSize, q: parseFloat(p.q) || 0, det: `Used: ${rawUsedText}` };
             }),
-            ...user.sale.map(s => ({ type: 'Sale', d: s.d, n: s.n, q: parseFloat(s.q) || 0, det: `Amt: ₹${(parseFloat(s.a) || 0).toFixed(2)}` }))
+            ...user.sale.map(s => {
+                const catSize = (s.cat && s.size) ? ` (${s.cat}/${s.size})` : '';
+                return { type: 'Sale', d: s.d, n: s.n + catSize, q: parseFloat(s.q) || 0, det: `Amt: ₹${(parseFloat(s.a) || 0).toFixed(2)}` };
+            })
         ];
 
         allActivities.sort((a, b) => {
