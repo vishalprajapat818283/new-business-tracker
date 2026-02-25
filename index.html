@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Business Tracker - Full Inventory Link</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
@@ -11,125 +11,144 @@
 </head>
 
 <body>
-  <div id="loading"
+  <div id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+  <div id="loading" role="status" aria-label="Syncing with Google Drive"
     style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:100; justify-content:center; align-items:center; font-weight:bold;">
     🔄 Syncing with Google Drive...
   </div>
   <div id="authSection" class="auth-container">
     <h1 style="text-align:center;">💼 Tracker Pro</h1>
     <p style="text-align:center; color:#6b7280;">Cloud Sync Enabled</p>
-    <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="initiateLogin()">
+    <button id="loginBtn" class="btn btn-primary" style="width:100%; margin-top:10px;" aria-label="Login with Google account">
       Login with Google
     </button>
     <div id="setupSection"
       style="display:none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; text-align: left;">
       <h3 style="margin-bottom:10px; font-size: 16px;">🏢 First-Time Setup</h3>
-      <label>Company Name</label>
-      <input type="text" id="setupCompany" placeholder="e.g. Vishal Traders" style="margin-bottom: 10px;">
-      <label>Owner Name</label>
-      <input type="text" id="setupOwner" placeholder="Your Name" style="margin-bottom: 15px;">
-      <button class="btn btn-primary" onclick="saveSetup()" style="width:100%;">Create Account</button>
+      <label for="setupCompany">Company Name</label>
+      <input type="text" id="setupCompany" placeholder="e.g. Vishal Traders" style="margin-bottom: 10px;" autocomplete="organization">
+      <label for="setupOwner">Owner Name</label>
+      <input type="text" id="setupOwner" placeholder="Your Name" style="margin-bottom: 15px;" autocomplete="name">
+      <button id="createAccountBtn" class="btn btn-primary" style="width:100%;">Create Account</button>
     </div>
-    <div id="authError" class="error-msg"></div>
+    <div id="authError" class="error-msg" role="alert"></div>
   </div>
 
   <header id="mainHeader" style="display:none;">
     <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: auto;">
       <div>
         <h1 id="headerTitle">Company</h1>
-        <div id="liveTime" style="font-size: 14px; margin-top: 5px; color: #9ca3af;"></div>
+        <div id="liveTime" style="font-size: 14px; margin-top: 5px; color: #9ca3af;" aria-live="off"></div>
       </div>
-      <button class="btn btn-danger" onclick="location.reload()">Logout</button>
+      <button id="logoutBtn" class="btn btn-danger" aria-label="Logout">Logout</button>
     </div>
   </header>
 
-  <div class="container" id="mainApp" style="display:none;">
-    <div class="tabs">
-      <button class="tab-btn active" data-target="dashboard">Dashboard</button>
-      <button class="tab-btn" data-target="rawSection">Raw Material</button>
-      <button class="tab-btn" data-target="prodSection">Production</button>
-      <button class="tab-btn" data-target="saleSection">Sales</button>
+  <div class="container" id="mainApp" style="display:none;" role="main">
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" data-target="dashboard" role="tab" aria-selected="true" aria-controls="dashboard">Dashboard</button>
+      <button class="tab-btn" data-target="rawSection" role="tab" aria-selected="false" aria-controls="rawSection">Raw Material</button>
+      <button class="tab-btn" data-target="prodSection" role="tab" aria-selected="false" aria-controls="prodSection">Production</button>
+      <button class="tab-btn" data-target="saleSection" role="tab" aria-selected="false" aria-controls="saleSection">Sales</button>
     </div>
 
-    <section id="dashboard" class="active">
+    <section id="dashboard" class="active" role="tabpanel">
       <div class="cards">
         <div class="card">
           <div class="card-title">Net Profit</div>
-          <div class="card-value" id="dProfit">₹0</div>
+          <div class="card-value" id="dProfit" aria-label="Net Profit">₹0</div>
         </div>
         <div class="card">
           <div class="card-title">Total Sales</div>
-          <div class="card-value" id="dSales">₹0</div>
+          <div class="card-value" id="dSales" aria-label="Total Sales">₹0</div>
         </div>
         <div class="card">
           <div class="card-title">Total Raw Cost</div>
-          <div class="card-value" id="dCost">₹0</div>
+          <div class="card-value" id="dCost" aria-label="Total Raw Cost">₹0</div>
         </div>
       </div>
 
       <h3>📦 Real-Time Stock Status</h3>
-      <table id="stockTable">
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Item Name</th>
-            <th>Total In</th>
-            <th>Total Out</th>
-            <th>Remains</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="search-bar">
+        <input type="search" id="searchStock" placeholder="🔍 Search stock..." aria-label="Search stock">
+        <button id="exportStockBtn" class="btn btn-secondary btn-small">📤 Export CSV</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="stockTable">
+          <thead>
+            <tr>
+              <th scope="col">Category</th>
+              <th scope="col">Item Name</th>
+              <th scope="col">Total In</th>
+              <th scope="col">Total Out</th>
+              <th scope="col">Remains</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
 
       <h3 style="margin-top:20px;">📜 All Activity Entries</h3>
-      <table id="activityTable">
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Date</th>
-            <th>Item</th>
-            <th>Qty</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="search-bar">
+        <input type="search" id="searchActivity" placeholder="🔍 Search activity..." aria-label="Search activity">
+        <button id="exportActivityBtn" class="btn btn-secondary btn-small">📤 Export CSV</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="activityTable">
+          <thead>
+            <tr>
+              <th scope="col">Type</th>
+              <th scope="col">Date</th>
+              <th scope="col">Item</th>
+              <th scope="col">Qty</th>
+              <th scope="col">Details</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
 
-    <section id="rawSection">
+    <section id="rawSection" role="tabpanel">
       <h2>Raw Material Collection</h2>
-      <form id="fRaw">
-        <div><label>Date</label><input type="date" id="riDate" required></div>
-        <div><label>Material Name</label><input type="text" id="riName" required></div>
-        <div><label>Qty Inward</label><input type="number" id="riQty" step="0.01" required></div>
-        <div><label>Total Cost</label><input type="number" id="riCost" step="0.01" required></div>
-        <div><label>Extra Cost</label><input type="number" id="riExtraCost" step="0.01" placeholder="Optional"></div>
+      <form id="fRaw" novalidate>
+        <div><label for="riDate">Date</label><input type="date" id="riDate" required></div>
+        <div><label for="riName">Material Name</label><input type="text" id="riName" required autocomplete="off"></div>
+        <div><label for="riQty">Qty Inward</label><input type="number" id="riQty" step="0.01" min="0" required></div>
+        <div><label for="riCost">Total Cost</label><input type="number" id="riCost" step="0.01" min="0" required></div>
+        <div><label for="riExtraCost">Extra Cost</label><input type="number" id="riExtraCost" step="0.01" min="0" placeholder="Optional"></div>
         <button type="submit" class="btn btn-primary">Save</button>
       </form>
-      <table id="tRaw">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Material</th>
-            <th>Qty</th>
-            <th>Cost</th>
-            <th>Extra Cost</th>
-            <th>Total</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="search-bar">
+        <input type="search" id="searchRaw" placeholder="🔍 Search raw materials..." aria-label="Search raw materials">
+        <button id="exportRawBtn" class="btn btn-secondary btn-small">📤 Export CSV</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="tRaw">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Material</th>
+              <th scope="col">Qty</th>
+              <th scope="col">Cost</th>
+              <th scope="col">Extra Cost</th>
+              <th scope="col">Total</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
 
-    <section id="prodSection">
+    <section id="prodSection" role="tabpanel">
       <h2>Production & Raw Usage</h2>
-      <form id="fProd">
-        <div><label>Date</label><input type="date" id="pDate" required></div>
-        <div><label>Product Name</label><input type="text" id="pName" required></div>
+      <form id="fProd" novalidate>
+        <div><label for="pDate">Date</label><input type="date" id="pDate" required></div>
+        <div><label for="pName">Product Name</label><input type="text" id="pName" required autocomplete="off"></div>
         <div>
-          <label>Category</label>
-          <select id="pCategory" required onchange="updateSizeOptions()">
+          <label for="pCategory">Category</label>
+          <select id="pCategory" required>
             <option value="">-- Select Category --</option>
             <option value="Child">Child</option>
             <option value="Male">Male</option>
@@ -138,66 +157,77 @@
         </div>
 
         <div>
-          <label>Size</label>
+          <label for="pSize">Size</label>
           <select id="pSize" required>
             <option value="">-- Select Size --</option>
           </select>
         </div>
-        <div><label>Qty Produced</label><input type="number" id="pQty" step="0.01" required></div>
-        <div><label>Extra Cost</label><input type="number" id="pExtraCost" step="0.01" placeholder="Optional"></div>
-        <button type="button" class="btn btn-secondary" onclick="addRawRow()">+ Add Raw Material</button>
+        <div><label for="pQty">Qty Produced</label><input type="number" id="pQty" step="0.01" min="0" required></div>
+        <div><label for="pExtraCost">Extra Cost</label><input type="number" id="pExtraCost" step="0.01" min="0" placeholder="Optional"></div>
+        <button type="button" id="addRawBtn" class="btn btn-secondary">+ Add Raw Material</button>
       </form>
 
       <div id="rawMaterialsBlock" class="raw-materials-block">
         <h3>📋 Raw Materials Used</h3>
         <div id="rawMaterialsList"></div>
-        <button type="button" class="btn btn-secondary" onclick="addRawRow()" style="margin-top: 10px;">+ Add Another
-          Raw</button>
+        <button type="button" id="addAnotherRawBtn" class="btn btn-secondary" style="margin-top: 10px;">+ Add Another Raw</button>
       </div>
 
-      <button class="btn btn-primary" onclick="saveProd()" style="width:100%; margin-top:15px;">Save Production</button>
+      <button id="saveProdBtn" class="btn btn-primary" style="width:100%; margin-top:15px;">Save Production</button>
 
-      <table id="tProd">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Product</th>
-            <th>Qty</th>
-            <th>Raw Materials Used</th>
-            <th>Extra Cost</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="search-bar" style="margin-top:20px;">
+        <input type="search" id="searchProd" placeholder="🔍 Search production..." aria-label="Search production">
+        <button id="exportProdBtn" class="btn btn-secondary btn-small">📤 Export CSV</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="tProd">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Product</th>
+              <th scope="col">Qty</th>
+              <th scope="col">Raw Materials Used</th>
+              <th scope="col">Extra Cost</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
 
-    <section id="saleSection">
+    <section id="saleSection" role="tabpanel">
       <h2>Sales Record</h2>
-      <form id="fSale">
-        <div><label>Date</label><input type="date" id="sDate" required></div>
+      <form id="fSale" novalidate>
+        <div><label for="sDate">Date</label><input type="date" id="sDate" required></div>
         <div>
-          <label>Product Name (Select from Stock)</label>
+          <label for="sName">Product Name (Select from Stock)</label>
           <select id="sName" required>
             <option value="">-- Select Finished Product --</option>
           </select>
         </div>
-        <div><label>Qty Sold</label><input type="number" id="sQty" step="0.01" required></div>
-        <div><label>Sale Amount</label><input type="number" id="sAmt" step="0.01" required></div>
+        <div><label for="sQty">Qty Sold</label><input type="number" id="sQty" step="0.01" min="0" required></div>
+        <div><label for="sAmt">Sale Amount</label><input type="number" id="sAmt" step="0.01" min="0" required></div>
         <button type="submit" class="btn btn-primary">Save Sale</button>
       </form>
-      <table id="tSale">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Product</th>
-            <th>Qty</th>
-            <th>Amount</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="search-bar">
+        <input type="search" id="searchSale" placeholder="🔍 Search sales..." aria-label="Search sales">
+        <button id="exportSaleBtn" class="btn btn-secondary btn-small">📤 Export CSV</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="tSale">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Product</th>
+              <th scope="col">Qty</th>
+              <th scope="col">Amount</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
   </div>
   <div id="footer">
