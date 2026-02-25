@@ -40,7 +40,10 @@
         <h1 id="headerTitle">Company</h1>
         <div id="liveTime" style="font-size: 14px; margin-top: 5px; color: #9ca3af;" aria-live="off"></div>
       </div>
-      <button id="logoutBtn" class="btn btn-danger" aria-label="Logout">Logout</button>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button id="themeToggleBtn" class="btn btn-secondary btn-small" aria-label="Toggle theme">🌙 Dark</button>
+        <button id="logoutBtn" class="btn btn-danger" aria-label="Logout">Logout</button>
+      </div>
     </div>
   </header>
 
@@ -211,7 +214,9 @@
         <button type="submit" class="btn btn-primary">Save Sale</button>
       </form>
       <div class="search-bar">
-        <input type="search" id="searchSale" placeholder="🔍 Search sales..." aria-label="Search sales">
+        <input type="search" id="searchSale" placeholder="🔍 Search by product name..." aria-label="Search sales">
+        <input type="search" id="searchSaleCategory" placeholder="Filter by category..." aria-label="Filter by category">
+        <input type="search" id="searchSaleSize" placeholder="Filter by size..." aria-label="Filter by size">
         <button id="exportSaleBtn" class="btn btn-secondary btn-small">📤 Export CSV</button>
       </div>
       <div class="table-wrapper">
@@ -220,6 +225,8 @@
             <tr>
               <th scope="col">Date</th>
               <th scope="col">Product</th>
+              <th scope="col">Category</th>
+              <th scope="col">Size</th>
               <th scope="col">Qty</th>
               <th scope="col">Amount</th>
               <th scope="col">Action</th>
